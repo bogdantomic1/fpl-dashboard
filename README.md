@@ -23,14 +23,9 @@ Follow these steps to set up the project locally:
    ```
 
 Install Dependencies:
-
-bash
-
 npm install
+
 Run the Application:
-
-bash
-
 npm start
 The app will be available at http://localhost:3000.
 
