@@ -1,36 +1,50 @@
-This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
+Certainly! Below is an example template for a GitHub README.md file for an FPL (Fantasy Premier League) dashboard project. You can customize this template based on the specific details and features of your project.
+
+# Fantasy Premier League (FPL) Dashboard
+
+Welcome to the Fantasy Premier League (FPL) Dashboard project! This web application allows users to track and manage their Fantasy Premier League teams with ease.
+
+## Features
+
+- **Player Selection:** Choose your FPL team from a list of available players.
+- **Team Management:** Make transfers, set your captain, and manage your starting lineup.
+- **Live Scores:** Get real-time updates on FPL scores and player performance.
+- **Statistics:** Access detailed statistics about players, teams, and overall FPL performance.
+- **Interactive Interface:** User-friendly interface for an intuitive FPL experience.
 
 ## Getting Started
 
-First, run the development server:
+Follow these steps to set up the project locally:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/bogdantomic1/fpl-dashboard.git
+   cd fpl-dashboard
+   ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Install Dependencies:
 
-You can start editing the page by modifying `app/page.js`. The page auto-updates as you edit the file.
+bash
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+npm install
+Run the Application:
 
-## Learn More
+bash
 
-To learn more about Next.js, take a look at the following resources:
+npm start
+The app will be available at http://localhost:3000.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Technologies Used
+React: JavaScript library for building user interfaces.
+Next.js: React framework for server-side rendering and routing.
+Tailwind CSS: Utility-first CSS framework for styling.
+APIs: Utilizes FPL API for fetching live data.
+Contributing
+Contributions are welcome! If you have any suggestions, bug reports, or improvements, feel free to open an issue or submit a pull request.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
+License
+This project is licensed under the MIT License.
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.
+Acknowledgments
+Special thanks to the Fantasy Premier League API for providing real-time FPL data.
+Inspired by the love for football and fantasy sports.
