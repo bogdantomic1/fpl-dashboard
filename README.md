@@ -1,5 +1,3 @@
-Certainly! Below is an example template for a GitHub README.md file for an FPL (Fantasy Premier League) dashboard project. You can customize this template based on the specific details and features of your project.
-
 # Fantasy Premier League (FPL) Dashboard
 
 Welcome to the Fantasy Premier League (FPL) Dashboard project! This web application allows users to track and manage their Fantasy Premier League teams with ease.
