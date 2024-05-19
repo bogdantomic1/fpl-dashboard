@@ -1,5 +1,3 @@
-Certainly! Below is an example template for a GitHub README.md file for an FPL (Fantasy Premier League) dashboard project. You can customize this template based on the specific details and features of your project.
-
 # Fantasy Premier League (FPL) Dashboard
 
 Welcome to the Fantasy Premier League (FPL) Dashboard project! This web application allows users to track and manage their Fantasy Premier League teams with ease.
@@ -17,20 +15,15 @@ Welcome to the Fantasy Premier League (FPL) Dashboard project! This web applicat
 Follow these steps to set up the project locally:
 
 1. **Clone the Repository:**
-   ```bash
+   ```
    git clone https://github.com/bogdantomic1/fpl-dashboard.git
    cd fpl-dashboard
    ```
 
 Install Dependencies:
-
-bash
-
 npm install
+
 Run the Application:
-
-bash
-
 npm start
 The app will be available at http://localhost:3000.
 
