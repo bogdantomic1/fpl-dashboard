@@ -1,0 +1,7 @@
+//  TODO: 
+[-] redosled za single player podatke
+[-] na tabeli bolji ui prikaz za odredjene podatke npr color coding prema odredjenim vrednostima
+[-] dodaj next fixtures za svakog igraca u single player data komponentu
+[-] treba mi leaderboard igraca koji su u ovom kolu transfered in and out
+[-] dodaj slike grbova
+[-] tabela flexibilnost 

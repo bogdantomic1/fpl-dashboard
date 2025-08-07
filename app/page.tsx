@@ -1,10 +1,6 @@
-
-
-
-
 // app/page.tsx
 'use client';
-
+import ComparePlayers from './components2/ComparePlayers';
 import { useState, useEffect, useMemo } from 'react';
 import {
   Select,
@@ -22,9 +18,57 @@ import {
   TableBody,
   TableCell,
 } from '@/components/ui/table';
+import { CircleCheckIcon, CircleHelpIcon, CircleIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-//import { playerColumnConfig, singlePlayerConfig } from '@/config/playerConfig';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { playerColumnConfig } from '../config/ColumnConfig';
+import { singlePlayerConfig } from '../config/PlayerConfig';
+import {
+  Drawer,
+  DrawerClose,
+  DrawerContent,
+  DrawerDescription,
+  DrawerFooter,
+  DrawerHeader,
+  DrawerTitle,
+  DrawerTrigger,
+} from '@/components/ui/drawer';
+import { ModeToggle } from './components2/modeToggle';
+import { Badge } from '@/components/ui/badge';
+import {
+  NavigationMenu,
+  NavigationMenuContent,
+  NavigationMenuIndicator,
+  NavigationMenuItem,
+  NavigationMenuLink,
+  NavigationMenuList,
+  NavigationMenuTrigger,
+  NavigationMenuViewport,
+  navigationMenuTriggerStyle,
+} from '@/components/ui/navigation-menu';
+import Link from 'next/link';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+const mockTransfersIn = [
+  { name: 'Saka', transfers: 5, owners: 100 },
+  { name: 'Kane', transfers: 4, owners: 200 },
+  { name: 'Havertz', transfers: 3, owners: 150 },
+  { name: 'De Bruyne', transfers: 2, owners: 120 },
+  { name: 'Fernandes', transfers: 1, owners: 130 },
+];
+
+const mockTransfersOut = [
+  { name: 'Odegaard', transfers: 6, owners: 90 },
+  { name: 'Rashford', transfers: 5, owners: 210 },
+  { name: 'Son', transfers: 4, owners: 180 },
+  { name: 'Martinelli', transfers: 2, owners: 80 },
+  { name: 'Sterling', transfers: 1, owners: 140 },
+];
 
 interface Player {
   id: number;
@@ -41,252 +85,141 @@ interface Position {
   singular_name: string;
 }
 
-export const playerColumnConfig: Record<string, ColumnConfig>  = {
-  "can_transact": { label: "Can Transact", visible: false },
-  "can_select": { label: "Can Select", visible: false },
-  "chance_of_playing_next_round": { label: "Chance Of Playing Next Round", visible: false },
-  "chance_of_playing_this_round": { label: "Chance Of Playing This Round", visible: false },
-  "code": { label: "Code", visible: false },
-  "cost_change_event": { label: "Cost Change Event", visible: false },
-  "cost_change_event_fall": { label: "Cost Change Event Fall", visible: false },
-  "cost_change_start": { label: "Cost Change Start", visible: false },
-  "cost_change_start_fall": { label: "Cost Change Start Fall", visible: false },
-  "dreamteam_count": { label: "Dreamteam Count", visible: false },
-  "element_type": { label: "Element Type", visible: true },
-  "ep_next": { label: "Ep Next", visible: false },
-  "ep_this": { label: "Ep This", visible: false },
-  "event_points": { label: "Event Points", visible: true },
-  "first_name": { label: "First Name", visible: false },
-  "form": { label: "Form", visible: true },
-  "id": { label: "Id", visible: false },
-  "in_dreamteam": { label: "In Dreamteam", visible: false },
-  "news": { label: "News", visible: false },
-  "news_added": { label: "News Added", visible: false },
-  "now_cost": {
-    label: "Cost",
-    visible: true,
-    format: (v: number, teams?: Team[]) => `${(v / 10).toFixed(1)}m`,
-  },
-  "photo": { label: "Photo", visible: false },
-  "points_per_game": { label: "Points Per Game", visible: true },
-  "removed": { label: "Removed", visible: false },
-  "second_name": { label: "Second Name", visible: false },
-  "selected_by_percent": { label: "Selected By Percent", visible: true },
-  "special": { label: "Special", visible: false },
-  "squad_number": { label: "Squad Number", visible: false },
-   "status": {
-    label: "Status",
-    visible: true,
-    format: (v: string) =>
-      v === "a" ? "Available" : v === "i" ? "Injured" : v === "u" ? "Unavailable" : "nzm",
-  },
-  "team": { label: "Team", visible: true},
-  "team_code": { label: "Team Code", visible: false },
-  "total_points": { label: "Total Points", visible: true },
-  "transfers_in": { label: "Transfers In", visible: true },
-  "transfers_in_event": { label: "Transfers In Event", visible: true },
-  "transfers_out": { label: "Transfers Out", visible: true },
-  "transfers_out_event": { label: "Transfers Out Event", visible: true },
-  "value_form": { label: "Value Form", visible: true },
-  "value_season": { label: "Value Season", visible: true },
-  "web_name": { label: "Web Name", visible: true },
-  "region": { label: "Region", visible: false },
-  "team_join_date": { label: "Team Join Date", visible: false },
-  "birth_date": { label: "Birth Date", visible: false },
-  "has_temporary_code": { label: "Has Temporary Code", visible: false },
-  "opta_code": { label: "Opta Code", visible: false },
-  "minutes": { label: "Minutes", visible: true },
-  "goals_scored": { label: "Goals Scored", visible: true },
-  "assists": { label: "Assists", visible: true },
-  "clean_sheets": { label: "Clean Sheets", visible: false },
-  "goals_conceded": { label: "Goals Conceded", visible: false },
-  "own_goals": { label: "Own Goals", visible: false },
-  "penalties_saved": { label: "Penalties Saved", visible: false },
-  "penalties_missed": { label: "Penalties Missed", visible: false },
-  "yellow_cards": { label: "Yellow Cards", visible: false },
-  "red_cards": { label: "Red Cards", visible: false },
-  "saves": { label: "Saves", visible: false },
-  "bonus": { label: "Bonus", visible: false },
-  "bps": { label: "Bps", visible: true },
-  "influence": { label: "Influence", visible: false },
-  "creativity": { label: "Creativity", visible: false },
-  "threat": { label: "Threat", visible: false },
-  "ict_index": { label: "Ict Index", visible: false },
-  "clearances_blocks_interceptions": { label: "Clearances Blocks Interceptions", visible: false },
-  "recoveries": { label: "Recoveries", visible: false },
-  "tackles": { label: "Tackles", visible: false },
-  "defensive_contribution": { label: "Defensive Contribution", visible: false },
-  "starts": { label: "Starts", visible: false },
-  "expected_goals": { label: "Expected Goals", visible: true },
-  "expected_assists": { label: "Expected Assists", visible: true },
-  "expected_goal_involvements": { label: "Expected Goal Involvements", visible: true },
-  "expected_goals_conceded": { label: "Expected Goals Conceded", visible: false },
-  "influence_rank": { label: "Influence Rank", visible: false },
-  "influence_rank_type": { label: "Influence Rank Type", visible: false },
-  "creativity_rank": { label: "Creativity Rank", visible: false },
-  "creativity_rank_type": { label: "Creativity Rank Type", visible: false },
-  "threat_rank": { label: "Threat Rank", visible: false },
-  "threat_rank_type": { label: "Threat Rank Type", visible: false },
-  "ict_index_rank": { label: "Ict Index Rank", visible: false },
-  "ict_index_rank_type": { label: "Ict Index Rank Type", visible: false },
-  "corners_and_indirect_freekicks_order": { label: "Corners And Indirect Freekicks Order", visible: false },
-  "corners_and_indirect_freekicks_text": { label: "Corners And Indirect Freekicks Text", visible: false },
-  "direct_freekicks_order": { label: "Direct Freekicks Order", visible: false },
-  "direct_freekicks_text": { label: "Direct Freekicks Text", visible: false },
-  "penalties_order": { label: "Penalties Order", visible: false },
-  "penalties_text": { label: "Penalties Text", visible: false },
-  "expected_goals_per_90": { label: "Expected Goals Per 90", visible: false },
-  "saves_per_90": { label: "Saves Per 90", visible: false },
-  "expected_assists_per_90": { label: "Expected Assists Per 90", visible: false },
-  "expected_goal_involvements_per_90": { label: "Expected Goal Involvements Per 90", visible: false },
-  "expected_goals_conceded_per_90": { label: "Expected Goals Conceded Per 90", visible: false },
-  "goals_conceded_per_90": { label: "Goals Conceded Per 90", visible: false },
-  "now_cost_rank": { label: "Now Cost Rank", visible: false },
-  "now_cost_rank_type": { label: "Now Cost Rank Type", visible: false },
-  "form_rank": { label: "Form Rank", visible: false },
-  "form_rank_type": { label: "Form Rank Type", visible: false },
-  "points_per_game_rank": { label: "Points Per Game Rank", visible: false },
-  "points_per_game_rank_type": { label: "Points Per Game Rank Type", visible: false },
-  "selected_rank": { label: "Selected Rank", visible: false },
-  "selected_rank_type": { label: "Selected Rank Type", visible: false },
-  "starts_per_90": { label: "Starts Per 90", visible: false },
-  "clean_sheets_per_90": { label: "Clean Sheets Per 90", visible: false },
-  "defensive_contribution_per_90": { label: "Defensive Contribution Per 90", visible: false },
-};
+export interface NavItem {
+  title: string;
+  href: string;
+  description?: string;
+  icon?: React.ReactNode;
+}
 
-export const singlePlayerConfig: Record<string, ColumnConfig>  = {
-  "can_transact": { label: "Can Transact", visible: false },
-  "can_select": { label: "Can Select", visible: false },
-  "chance_of_playing_next_round": { label: "Chance Of Playing Next Round", visible: false },
-  "chance_of_playing_this_round": { label: "Chance Of Playing This Round", visible: false },
-  "code": { label: "Code", visible: false },
-  "cost_change_event": { label: "Cost Change Event", visible: false },
-  "cost_change_event_fall": { label: "Cost Change Event Fall", visible: false },
-  "cost_change_start": { label: "Cost Change Start", visible: false },
-  "cost_change_start_fall": { label: "Cost Change Start Fall", visible: false },
-  "dreamteam_count": { label: "Dreamteam Count", visible: false },
-  "element_type": { label: "Element Type", visible: true },
-  "ep_next": { label: "Ep Next", visible: false },
-  "ep_this": { label: "Ep This", visible: false },
-  "event_points": { label: "Event Points", visible: true },
-  "first_name": { label: "First Name", visible: false },
-  "form": { label: "Form", visible: true },
-  "id": { label: "Id", visible: false },
-  "in_dreamteam": { label: "In Dreamteam", visible: false },
-  "news": { label: "News", visible: false },
-  "news_added": { label: "News Added", visible: false },
-  "now_cost": {
-    label: "Cost",
-    visible: true,
-    format: (v: number, teams?: Team[]) => `${(v / 10).toFixed(1)}m`,
+export const navItems: NavItem[] = [
+  {
+    title: 'Home',
+    href: '/',
+    description: 'Return to dashboard overview',
+    icon: <CircleIcon size={16} />,
   },
-  "photo": { label: "Photo", visible: false },
-  "points_per_game": { label: "Points Per Game", visible: true },
-  "removed": { label: "Removed", visible: false },
-  "second_name": { label: "Second Name", visible: false },
-  "selected_by_percent": { label: "Selected By Percent", visible: true },
-  "special": { label: "Special", visible: false },
-  "squad_number": { label: "Squad Number", visible: false },
-   "status": {
-    label: "Status",
-    visible: true,
-    format: (v: string) =>
-      v === "a" ? "Available" : v === "i" ? "Injured" : v === "u" ? "Unavailable" : "nzm",
+  {
+    title: 'Team Picks',
+    href: '/picks',
+    description: 'Review and set your weekly team',
+    icon: <CircleCheckIcon size={16} />,
   },
-  "team": { label: "Team", visible: true },
-  //"team": { label: "Team", visible: true, format: (v: number, teams1: Team[]) => teams1.find(t => t.id === v)?.name || 'Unknown' },
-  "team_code": { label: "Team Code", visible: false },
-  "total_points": { label: "Total Points", visible: true },
-  "transfers_in": { label: "Transfers In", visible: true },
-  "transfers_in_event": { label: "Transfers In Event", visible: true },
-  "transfers_out": { label: "Transfers Out", visible: true },
-  "transfers_out_event": { label: "Transfers Out Event", visible: true },
-  "value_form": { label: "Value Form", visible: true },
-  "value_season": { label: "Value Season", visible: true },
-  "web_name": { label: "Web Name", visible: true },
-  "region": { label: "Region", visible: false },
-  "team_join_date": { label: "Team Join Date", visible: false },
-  "birth_date": { label: "Birth Date", visible: false },
-  "has_temporary_code": { label: "Has Temporary Code", visible: false },
-  "opta_code": { label: "Opta Code", visible: false },
-  "minutes": { label: "Minutes", visible: true },
-  "goals_scored": { label: "Goals Scored", visible: true },
-  "assists": { label: "Assists", visible: true },
-  "clean_sheets": { label: "Clean Sheets", visible: false },
-  "goals_conceded": { label: "Goals Conceded", visible: false },
-  "own_goals": { label: "Own Goals", visible: false },
-  "penalties_saved": { label: "Penalties Saved", visible: false },
-  "penalties_missed": { label: "Penalties Missed", visible: false },
-  "yellow_cards": { label: "Yellow Cards", visible: false },
-  "red_cards": { label: "Red Cards", visible: false },
-  "saves": { label: "Saves", visible: false },
-  "bonus": { label: "Bonus", visible: false },
-  "bps": { label: "Bps", visible: true },
-  "influence": { label: "Influence", visible: false },
-  "creativity": { label: "Creativity", visible: false },
-  "threat": { label: "Threat", visible: false },
-  "ict_index": { label: "Ict Index", visible: false },
-  "clearances_blocks_interceptions": { label: "Clearances Blocks Interceptions", visible: false },
-  "recoveries": { label: "Recoveries", visible: false },
-  "tackles": { label: "Tackles", visible: false },
-  "defensive_contribution": { label: "Defensive Contribution", visible: false },
-  "starts": { label: "Starts", visible: false },
-  "expected_goals": { label: "Expected Goals", visible: true },
-  "expected_assists": { label: "Expected Assists", visible: true },
-  "expected_goal_involvements": { label: "Expected Goal Involvements", visible: true },
-  "expected_goals_conceded": { label: "Expected Goals Conceded", visible: false },
-  "influence_rank": { label: "Influence Rank", visible: false },
-  "influence_rank_type": { label: "Influence Rank Type", visible: false },
-  "creativity_rank": { label: "Creativity Rank", visible: false },
-  "creativity_rank_type": { label: "Creativity Rank Type", visible: false },
-  "threat_rank": { label: "Threat Rank", visible: false },
-  "threat_rank_type": { label: "Threat Rank Type", visible: false },
-  "ict_index_rank": { label: "Ict Index Rank", visible: false },
-  "ict_index_rank_type": { label: "Ict Index Rank Type", visible: false },
-  "corners_and_indirect_freekicks_order": { label: "Corners And Indirect Freekicks Order", visible: false },
-  "corners_and_indirect_freekicks_text": { label: "Corners And Indirect Freekicks Text", visible: false },
-  "direct_freekicks_order": { label: "Direct Freekicks Order", visible: false },
-  "direct_freekicks_text": { label: "Direct Freekicks Text", visible: false },
-  "penalties_order": { label: "Penalties Order", visible: false },
-  "penalties_text": { label: "Penalties Text", visible: false },
-  "expected_goals_per_90": { label: "Expected Goals Per 90", visible: false },
-  "saves_per_90": { label: "Saves Per 90", visible: false },
-  "expected_assists_per_90": { label: "Expected Assists Per 90", visible: false },
-  "expected_goal_involvements_per_90": { label: "Expected Goal Involvements Per 90", visible: false },
-  "expected_goals_conceded_per_90": { label: "Expected Goals Conceded Per 90", visible: false },
-  "goals_conceded_per_90": { label: "Goals Conceded Per 90", visible: false },
-  "now_cost_rank": { label: "Now Cost Rank", visible: false },
-  "now_cost_rank_type": { label: "Now Cost Rank Type", visible: false },
-  "form_rank": { label: "Form Rank", visible: false },
-  "form_rank_type": { label: "Form Rank Type", visible: false },
-  "points_per_game_rank": { label: "Points Per Game Rank", visible: false },
-  "points_per_game_rank_type": { label: "Points Per Game Rank Type", visible: false },
-  "selected_rank": { label: "Selected Rank", visible: false },
-  "selected_rank_type": { label: "Selected Rank Type", visible: false },
-  "starts_per_90": { label: "Starts Per 90", visible: false },
-  "clean_sheets_per_90": { label: "Clean Sheets Per 90", visible: false },
-  "defensive_contribution_per_90": { label: "Defensive Contribution Per 90", visible: false },
-};
+  {
+    title: 'Transfers',
+    href: '/transfers',
+    description: 'Manage your transfers history',
+    icon: <CircleHelpIcon size={16} />,
+  },
+  {
+    title: 'Player Stats',
+    href: '/stats',
+    description: 'Analyze player performance',
+  },
+  {
+    title: 'Fixture Planner',
+    href: '/fixtures',
+    description: 'Plan and view upcoming fixtures',
+  },
+];
+
+function ListItem({ item }: { item: NavItem }) {
+  return (
+    <li>
+      <NavigationMenuLink asChild>
+        <Link
+          href={item.href}
+          className="flex items-start space-x-2 p-4 rounded-lg hover:bg-muted"
+        >
+          {item.icon && <span className="mt-1">{item.icon}</span>}
+          <div>
+            <div className="text-sm font-medium leading-none">{item.title}</div>
+            {item.description && (
+              <p className="text-muted-foreground text-sm leading-snug mt-1">
+                {item.description}
+              </p>
+            )}
+          </div>
+        </Link>
+      </NavigationMenuLink>
+    </li>
+  );
+}
 
 export default function Dashboard() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [positions, setPositions] = useState<Position[]>([]);
-  const [teamFilter, setTeamFilter] = useState('');
-  const [positionFilter, setPositionFilter] = useState('');
+  const [teamFilter, setTeamFilter] = useState('all');
+  const [positionFilter, setPositionFilter] = useState('all');
   const [maxPrice, setMaxPrice] = useState<number>(15);
   const [page, setPage] = useState(1);
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [selectedPlayers, setSelectedPlayers] = useState<number[]>([]);
   const [sortKey, setSortKey] = useState<string>('total_points');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const pageSize = 10;
+
+  const toggleSelect = (playerId: number) => {
+    setSelectedPlayers((prev) =>
+      prev.includes(playerId)
+        ? prev.filter((id) => id !== playerId)
+        : [...prev, playerId]
+    );
+  };
+
+  const mockNextFixtures = [
+    { team: 'Chelsea', venue: 'A' },
+    { team: 'Man Utd', venue: 'H' },
+    { team: 'Arsenal', venue: 'A' },
+    { team: 'Chelsea', venue: 'A' },
+    { team: 'Man Utd', venue: 'H' },
+    { team: 'Arsenal', venue: 'A' },
+    { team: 'Chelsea', venue: 'A' },
+    { team: 'Man Utd', venue: 'H' },
+    { team: 'Arsenal', venue: 'A' },
+    { team: 'Chelsea', venue: 'A' },
+    { team: 'Man Utd', venue: 'H' },
+    { team: 'Arsenal', venue: 'A' },
+    { team: 'Chelsea', venue: 'A' },
+    { team: 'Man Utd', venue: 'H' },
+    { team: 'Arsenal', venue: 'A' },
+    { team: 'Chelsea', venue: 'A' },
+    { team: 'Man Utd', venue: 'H' },
+    { team: 'Arsenal', venue: 'A' },
+    { team: 'Chelsea', venue: 'A' },
+    { team: 'Man Utd', venue: 'H' },
+    { team: 'Arsenal', venue: 'A' },
+    { team: 'Chelsea', venue: 'A' },
+    { team: 'Man Utd', venue: 'H' },
+    { team: 'Arsenal', venue: 'A' },
+    { team: 'Chelsea', venue: 'A' },
+    { team: 'Man Utd', venue: 'H' },
+    { team: 'Arsenal', venue: 'A' },
+  ];
 
   const allKeys = useMemo(() => {
     if (players.length === 0) return [];
     return Object.keys(players[0]);
   }, [players]);
 
-  const visibleKeys = allKeys.filter((key) => playerColumnConfig[key]?.visible ?? false);
+  const visibleKeys = allKeys.filter(
+    (key) => playerColumnConfig[key]?.visible ?? false
+  );
+
+  const sortedKeys = visibleKeys.sort((a, b) => {
+    const orderA = playerColumnConfig[a]?.order ?? 0;
+    const orderB = playerColumnConfig[b]?.order ?? 0;
+    return orderA - orderB;
+  });
+
+  {
+    /*CONSOLE.LOG START*/
+  }
+  console.log(selectedPlayer);
+  {
+    /*CONSOLE.LOG END*/
+  }
 
   useEffect(() => {
     const fetchData = async () => {
@@ -309,10 +242,18 @@ export default function Dashboard() {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    console.log('Selected Players:', selectedPlayers);
+  }, [selectedPlayers]);
+
   const filtered = useMemo(() => {
     let data = players
-      .filter((p) => !teamFilter || p.team === parseInt(teamFilter))
-      .filter((p) => !positionFilter || p.element_type === parseInt(positionFilter))
+      .filter((p) => teamFilter === 'all' || p.team === parseInt(teamFilter))
+      .filter(
+        (p) =>
+          positionFilter === 'all' ||
+          p.element_type === parseInt(positionFilter)
+      )
       .filter((p) => p.now_cost / 10 <= maxPrice);
 
     data.sort((a, b) => {
@@ -346,15 +287,21 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="flex min-h-screen bg-[#f7f5fa] dark:bg-[#37003c]">
+    <div className="min-h-screen bg-[#f7f5fa] dark:bg-[#37003c] block">
       <div className="flex-1 p-6">
         {/* Filters */}
         <div className="flex flex-wrap gap-4 mb-6">
-          <Select onValueChange={setTeamFilter}>
+          <Select onValueChange={setTeamFilter} value={teamFilter}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by team" />
+              <SelectValue>
+                {teamFilter === 'all'
+                  ? 'All Teams'
+                  : teams.find((t) => String(t.id) === teamFilter)?.name ||
+                    'Filter by team'}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
               {teams.map((t) => (
                 <SelectItem key={t.id} value={String(t.id)}>
                   {t.name}
@@ -363,11 +310,17 @@ export default function Dashboard() {
             </SelectContent>
           </Select>
 
-          <Select onValueChange={setPositionFilter}>
+          <Select onValueChange={setPositionFilter} value={positionFilter}>
             <SelectTrigger className="w-[200px]">
-              <SelectValue placeholder="Filter by position" />
+              <SelectValue>
+                {positionFilter === 'all'
+                  ? 'All Positions'
+                  : positions.find((p) => String(p.id) === positionFilter)
+                      ?.singular_name || 'Filter by position'}
+              </SelectValue>
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">All Positions</SelectItem>
               {positions.map((pos) => (
                 <SelectItem key={pos.id} value={String(pos.id)}>
                   {pos.singular_name}
@@ -389,6 +342,7 @@ export default function Dashboard() {
               className="w-40"
             />
           </div>
+          <ModeToggle />
         </div>
 
         {/* Table */}
@@ -396,7 +350,7 @@ export default function Dashboard() {
           <Table>
             <TableHeader>
               <TableRow>
-                {visibleKeys.map((key) => (
+                {sortedKeys.map((key) => (
                   <TableHead
                     key={key}
                     className="cursor-pointer hover:underline"
@@ -409,52 +363,191 @@ export default function Dashboard() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {currentPage.map((player) => (
-                <TableRow
-                  key={player.id}
-                  onClick={() => setSelectedPlayer(player)}
-                  className="cursor-pointer"
-                >
-                  {visibleKeys.map((key) => {
-                    const raw = key === 'team' ? teams.find((t) => t.id === player.team)?.name : player[key];
-                    const format = playerColumnConfig[key]?.format;
-                    return <TableCell key={key}>{format ? format(raw) : String(raw)}</TableCell>;
-                  })}
-                </TableRow>
-              ))}
+              {currentPage.map((player) => {
+                const isChecked = selectedPlayers.includes(player.id);
+                return (
+                  <TableRow
+                    key={player.id}
+                    onClick={() => {
+                      setSelectedPlayer(player);
+                    }}
+                    //onClick={() => }
+                    className="cursor-pointer"
+                  >
+                    {/* --- Checkbox cell --- */}
+                    <TableCell className="p-0 w-[40px]">
+                      <Checkbox
+                        checked={isChecked}
+                        onCheckedChange={() => toggleSelect(player.id)}
+                        // prevent the row-click handler from firing
+                        onClick={(e) => e.stopPropagation()}
+                        className={`cursor-pointer ${
+                          selectedPlayers.includes(player.id)
+                            ? 'bg-purple-50 dark:bg-purple-900'
+                            : ''
+                        }`}
+                      />
+                    </TableCell>
+                    {sortedKeys.map((key) => {
+                      const raw =
+                        key === 'team'
+                          ? teams.find((t) => t.id === player.team)?.name
+                          : key === 'element_type'
+                            ? positions.find(
+                                (p) => p.id === player.element_type
+                              )?.singular_name
+                            : player[key]; //player[key]
+                      const format = playerColumnConfig[key]?.format;
+                      return (
+                        <TableCell key={key}>
+                          {format ? format(raw) : String(raw)}
+                        </TableCell>
+                      );
+                    })}
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
-
+          {/* Pagination */}
           <div className="flex justify-between items-center p-4">
-            <Button variant="secondary" disabled={page === 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</Button>
-            <span className="text-sm text-[#37003c] dark:text-white">Page {page} of {totalPages || 1}</span>
-            <Button variant="secondary" disabled={page === totalPages || totalPages === 0} onClick={() => setPage((p) => Math.min(totalPages, p + 1))}>Next</Button>
+            <Button
+              variant="secondary"
+              disabled={page === 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+            >
+              Previous
+            </Button>
+            <span className="text-sm text-[#37003c] dark:text-white">
+              Page {page} of {totalPages || 1}
+            </span>
+            <Button
+              variant="secondary"
+              disabled={page === totalPages || totalPages === 0}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+            >
+              Next
+            </Button>
           </div>
         </div>
       </div>
 
-      <aside className="hidden lg:block lg:w-80 bg-[#ebe4f0] dark:bg-[#2d0036] p-6"></aside>
+      {/* ─── Transfers In/Out (Tabs) ─── */}
+      <div className="mt-8 p-4 ml-4 mr-4 bg-white dark:bg-[#2d0036] rounded-lg">
+        <Tabs defaultValue="in" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="in">In</TabsTrigger>
+            <TabsTrigger value="out">Out</TabsTrigger>
+          </TabsList>
 
-      <Dialog open={!!selectedPlayer} onOpenChange={() => setSelectedPlayer(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle className="text-center text-xl font-bold">{selectedPlayer?.web_name}</DialogTitle>
-          </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 max-h-[70vh] overflow-y-auto">
-            {selectedPlayer && Object.keys(selectedPlayer).map((key) => {
-              if (!singlePlayerConfig[key]?.visible) return null;
-              const raw = key === 'team' ? teams.find(t => t.id === selectedPlayer.team)?.name : selectedPlayer[key];
-              const format = singlePlayerConfig[key]?.format;
-              return (
-                <div key={key} className="bg-muted/20 rounded-md p-3">
-                  <div className="text-sm text-muted-foreground font-semibold">{singlePlayerConfig[key]?.label}</div>
-                  <div className="text-base font-medium text-foreground">{format ? format(raw) : String(raw)}</div>
+          <TabsContent value="in">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Transfers In</TableHead>
+                  <TableHead>Ownership %</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {mockTransfersIn.map((p) => {
+                  const pct = ((p.transfers / p.owners) * 100).toFixed(1) + '%';
+                  return (
+                    <TableRow key={p.name}>
+                      <TableCell>{p.name}</TableCell>
+                      <TableCell>{p.transfers}</TableCell>
+                      <TableCell>{pct}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TabsContent>
+          <TabsContent value="out">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Transfers Out</TableHead>
+                  <TableHead>Ownership %</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {mockTransfersOut.map((p) => {
+                  const pct = ((p.transfers / p.owners) * 100).toFixed(1) + '%';
+                  return (
+                    <TableRow key={p.name}>
+                      <TableCell>{p.name}</TableCell>
+                      <TableCell>{p.transfers}</TableCell>
+                      <TableCell>{pct}</TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </TabsContent>
+        </Tabs>
+      </div>
+
+      {/* ─── Compare Players Section ─── */}
+      <ComparePlayers allPlayers={players} selectedPlayers={selectedPlayers} />
+
+      <Drawer
+        open={!!selectedPlayer}
+        onOpenChange={() => setSelectedPlayer(null)}
+      >
+        <DrawerContent className="max-w-5xl mx-auto">
+          <DrawerHeader>
+            <DrawerTitle className="text-center text-xl font-bold">
+              {selectedPlayer?.first_name +
+                ' ' +
+                selectedPlayer?.second_name +
+                '  #' +
+                selectedPlayer?.squad_number || 'Player Details'}
+            </DrawerTitle>
+          </DrawerHeader>
+          {/* ――― Next Fixtures (hard-coded) ――― */}
+          {selectedPlayer && (
+            <div className="flex gap-2 overflow-x-scroll px-4 py-2 mb-4 w-max">
+              {mockNextFixtures.map((fx, i) => (
+                <div
+                  key={i}
+                  className="bg-muted/20 dark:bg-muted/50 rounded-md px-3 py-1 text-sm font-semibold"
+                >
+                  {fx.team} ({fx.venue})
                 </div>
-              );
-            })}
+              ))}
+            </div>
+          )}
+          <div
+            className="grid gap-4 max-h-[70vh] overflow-y-auto
+        grid-cols-2
+        sm:grid-cols-2
+        md:grid-cols-3
+        lg:grid-cols-4"
+          >
+            {selectedPlayer &&
+              Object.keys(selectedPlayer).map((key) => {
+                if (!singlePlayerConfig[key]?.visible) return null;
+                const raw =
+                  key === 'team'
+                    ? teams.find((t) => t.id === selectedPlayer.team)?.name
+                    : selectedPlayer[key];
+                const format = singlePlayerConfig[key]?.format;
+                return (
+                  <div key={key} className="bg-muted/20 rounded-md p-3">
+                    <div className="text-sm text-muted-foreground font-semibold">
+                      {singlePlayerConfig[key]?.label}
+                    </div>
+                    <div className="text-base font-medium text-foreground">
+                      {format ? format(raw) : String(raw)}
+                    </div>
+                  </div>
+                );
+              })}
           </div>
-        </DialogContent>
-      </Dialog>
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }
