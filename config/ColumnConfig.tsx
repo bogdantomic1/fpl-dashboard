@@ -1,10 +1,11 @@
 interface ColumnConfig {
   label: string;
   visible: boolean;
-  format?: (v: any) => React.Node;
+  format?: (v: any) => React.ReactNode;
   order?: number;
 }
 import { Badge } from '@/components/ui/badge';
+import type { Team } from '@/types/fpl';
 
 export const playerColumnConfig: Record<string, ColumnConfig> = {
   team: { label: 'Team', visible: true, order: 0 },
@@ -63,7 +64,7 @@ export const playerColumnConfig: Record<string, ColumnConfig> = {
         default:
           return (
             <Badge
-              variant="ghost"
+              variant="secondary"
               className="bg-green-600 text-black dark:bg-blue-600"
             >
               N/A

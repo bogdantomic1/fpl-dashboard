@@ -8,7 +8,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { ModeToggle } from '../components/modeToggle';
+import ModeToggle from './modeToggle';
 import type { Team, Position } from '@/types/fpl';
 
 interface Props {

@@ -11,7 +11,7 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { singlePlayerConfig } from '../../config/PlayerConfig';
-import { Player } from '@/types/Player';
+import type { Player } from '@/types/fpl';
 
 export default function ComparePlayers({
   allPlayers,

@@ -54,7 +54,6 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Fixture, Player, Team, Position, NavItem } from '@/types/fpl';
 import { getTeamForm } from '@/lib/fpl/difficulty';
-import { NavItem } from '@/types/NavItem';
 import { computeDifficultyMap, difficultyColors } from '@/lib/fpl/difficulty';
 import { buildTransferStats, topNIn, topNOut } from '@/lib/fpl/transfers';
 import { filterAndSortPlayers } from '@/lib/fpl/filters';

@@ -2,9 +2,11 @@ import { Badge } from '@/components/ui/badge';
 interface ColumnConfig {
   label: string;
   visible: boolean;
-  format?: (v: any) => React.Node;
+  format?: (v: any) => React.ReactNode;
   order?: number;
 }
+
+import type { Team } from '@/types/fpl';
 export const singlePlayerConfig: Record<string, ColumnConfig> = {
   can_transact: { label: 'Can Transact', visible: false },
   can_select: { label: 'Can Select', visible: false },
@@ -84,7 +86,7 @@ export const singlePlayerConfig: Record<string, ColumnConfig> = {
         default:
           return (
             <Badge
-              variant="ghost"
+              variant="secondary"
               className="bg-green-600 text-black dark:bg-blue-600"
             >
               N/A
