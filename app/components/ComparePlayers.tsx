@@ -10,13 +10,8 @@ import {
 } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
-import {singlePlayerConfig}  from '../../config/PlayerConfig';
-
-interface Player {
-  id: number;
-  web_name: string;
-  [key: string]: any;
-}
+import { singlePlayerConfig } from '../../config/PlayerConfig';
+import { Player } from '@/types/Player';
 
 export default function ComparePlayers({
   allPlayers,
@@ -26,10 +21,10 @@ export default function ComparePlayers({
   selectedPlayers: number[];
 }) {
   // Build a list of all configurable attributes:
-const cfg = singlePlayerConfig ?? {};
-const attributeOptions = Object.entries(cfg)
-  .filter(([, cfg]) => cfg.visible)
-  .map(([key, cfg]) => ({ key, label: cfg.label }));
+  const cfg = singlePlayerConfig ?? {};
+  const attributeOptions = Object.entries(cfg)
+    .filter(([, cfg]) => cfg.visible)
+    .map(([key, cfg]) => ({ key, label: cfg.label }));
 
   // State for which attributes to display:
   const [selectedAttrs, setSelectedAttrs] = useState<string[]>([]);
@@ -62,7 +57,7 @@ const attributeOptions = Object.entries(cfg)
   // Filter players
   const players = allPlayers.filter((p) => selectedPlayers.includes(p.id));
 
-  console.log(singlePlayerConfig, "asdased");
+  console.log(singlePlayerConfig, 'asdased');
 
   return (
     <div className="mt-8 relative p-4 bg-white dark:bg-[#2d0036] rounded-lg">
@@ -108,51 +103,52 @@ const attributeOptions = Object.entries(cfg)
       </h3>
 
       {players.length === 0 ? (
-        <div className="text-sm text-muted-foreground">
-          No players selected
-        </div>
+        <div className="text-sm text-muted-foreground">No players selected</div>
       ) : (
-       <div className="overflow-x-auto shadow-sm ring-1 ring-gray-200 dark:ring-gray-700 rounded-lg">
-  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-    <thead className="bg-gray-50 dark:bg-gray-800">
-      <tr className="divide-x divide-gray-200 dark:divide-gray-700">
-        {/* empty corner */}
-        <th className="px-4 py-2"></th>
-        {players.map((p) => (
-          <th
-            key={p.id}
-            className="px-4 py-2 text-center text-sm font-bold text-gray-700 dark:text-gray-200 whitespace-nowrap"
-          >
-            {p.web_name}
-          </th>
-        ))}
-      </tr>
-    </thead>
-    <tbody className="bg-white dark:bg-[#2d0036] divide-y divide-gray-200 dark:divide-gray-700 divide-x divide-gray-200 dark:divide-gray-700">
-      {selectedAttrs.map((key) => (
-        <tr key={key} className="divide-x divide-gray-200 dark:divide-gray-700">
-          {/* attribute label */}
-          <td className="px-4 py-3 font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">
-            {singlePlayerConfig[key].label}
-          </td>
-          {/* one cell per player */}
-          {players.map((p) => {
-            const raw = p[key]
-            const formatter = singlePlayerConfig[key].format
-            return (
-              <td
-                key={p.id}
-                className="px-4 py-3 text-center text-sm text-gray-700 dark:text-gray-200 whitespace-nowrap"
-              >
-                {formatter ? formatter(raw) : String(raw)}
-              </td>
-            )
-          })}
-        </tr>
-      ))}
-    </tbody>
-  </table>
-</div>
+        <div className="overflow-x-auto shadow-sm ring-1 ring-gray-200 dark:ring-gray-700 rounded-lg">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+            <thead className="bg-gray-50 dark:bg-gray-800">
+              <tr className="divide-x divide-gray-200 dark:divide-gray-700">
+                {/* empty corner */}
+                <th className="px-4 py-2"></th>
+                {players.map((p) => (
+                  <th
+                    key={p.id}
+                    className="px-4 py-2 text-center text-sm font-bold text-gray-700 dark:text-gray-200 whitespace-nowrap"
+                  >
+                    {p.web_name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="bg-white dark:bg-[#2d0036] divide-y divide-gray-200 dark:divide-gray-700 divide-x">
+              {selectedAttrs.map((key) => (
+                <tr
+                  key={key}
+                  className="divide-x divide-gray-200 dark:divide-gray-700"
+                >
+                  {/* attribute label */}
+                  <td className="px-4 py-3 font-medium text-gray-600 dark:text-gray-300 whitespace-nowrap">
+                    {singlePlayerConfig[key].label}
+                  </td>
+                  {/* one cell per player */}
+                  {players.map((p) => {
+                    const raw = p[key];
+                    const formatter = singlePlayerConfig[key].format;
+                    return (
+                      <td
+                        key={p.id}
+                        className="px-4 py-3 text-center text-sm text-gray-700 dark:text-gray-200 whitespace-nowrap"
+                      >
+                        {formatter ? formatter(raw) : String(raw)}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

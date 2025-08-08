@@ -1,9 +1,7 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
-import { SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
-import { AppSidebar } from './components2/app-sidebar';
-import { ThemeProvider } from './components2/theme-provider';
-
+import { ThemeProvider } from './components/theme-provider';
+import TopNav from './components/TopNav';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
@@ -22,6 +20,8 @@ export default function RootLayout({ children }) {
           enableSystem
           disableTransitionOnChange
         >
+          <TopNav />
+
           {children}
         </ThemeProvider>
       </body>
