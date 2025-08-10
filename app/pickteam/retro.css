@@ -1,0 +1,196 @@
+/* ===== Layout: header and pitch ===== */
+.retro {
+  padding: 16px;
+}
+
+.retro-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.retro-title {
+  font-weight: 800;
+  font-size: 22px;
+}
+
+.retro-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.retro-select {
+  width: 110px;
+}
+
+/* Pitch fills viewport height (minus header), gets wider but stays centered */
+.retro-pitch {
+  position: relative;
+  margin: 0 auto;
+  width: min(1280px, 96vw);
+  height: calc(100vh - 140px);
+  max-height: 1100px;
+  min-height: 520px;
+}
+
+.retro-pitch__bg {
+  position: absolute;
+  inset: 0;
+  background-image: url('/field.svg');
+  background-repeat: no-repeat;
+  background-position: top center;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2));
+}
+
+/* rows sit on top of the field */
+.retro-pitch__rows {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  /* padding: 6% 10% 10%; */
+  pointer-events: none; /* children re-enable */
+}
+
+.retro-row {
+  display: flex;
+  justify-content: center;
+  gap: clamp(16px, 2vw, 28px);
+  pointer-events: none;
+}
+
+.retro-bench {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  width: 70%;
+  margin: 0 auto 10px;
+  pointer-events: none;
+}
+
+.retro-bench__cell {
+  display: flex;
+  justify-content: center;
+}
+
+/* ===== Card ===== */
+.retro-card-wrap {
+  position: relative;
+  width: clamp(130px, 10vw, 200px); /* original width */
+  pointer-events: auto;
+}
+
+/* rails stay inside card, appear on hover */
+.retro-rail {
+  position: absolute;
+  top: 0;
+  display: grid;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.12s ease-in-out;
+  padding: 6px;
+}
+
+.retro-card-wrap:hover .retro-rail {
+  opacity: 1;
+}
+
+.retro-rail--left {
+  left: -4px;
+} /* tucked to the edge */
+.retro-rail--right {
+  right: -40px;
+
+  z-index: 2;
+} /* tucked to the edge */
+
+/* Chips */
+.retro-chip {
+  font-size: 11px;
+  color: #fff;
+  border-radius: 6px;
+  padding: 6px 8px;
+  background: rgba(0, 0, 0, 0.25);
+  text-align: center;
+  white-space: nowrap;
+}
+.retro-chip--empty {
+  background: rgba(255, 255, 255, 0.18);
+  color: #eee;
+}
+.pts {
+  background: #0f766e;
+}
+
+/* jersey */
+.retro-jersey {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+.retro-jersey__img {
+  width: 100%;
+  aspect-ratio: 3;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center center;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
+}
+
+/* ===== NEW: name + actions ===== */
+.retro-namebar {
+  margin-top: 6px;
+
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  border-radius: 10px;
+  text-align: center;
+  padding: 8px 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.retro-actions {
+  margin-bottom: 6px;
+  display: flex;
+  grid-template-columns: 1fr 1fr;
+  gap: 15px;
+  justify-content: center;
+}
+
+.retro-action-btn--danger {
+  background: #ef4444;
+  color: #fff;
+}
+.retro-action-btn--danger:hover {
+  background: #dc2626;
+}
+
+/* Typography helpers */
+.retro-small {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+
+/* light / dark tweaks */
+/* .retro-light .retro-namebar {
+  background: rgba(0, 0, 0, 0.65);
+} */
+.retro-light .retro-rail .retro-chip--empty {
+  background: rgba(0, 0, 0, 0.12);
+  color: #222;
+}
+
+/* make sure rails don’t overflow outside pitch visually on very narrow screens */
+@media (max-width: 900px) {
+  .retro-rail {
+    display: none;
+  } /* hide rails on small widths to keep inside field */
+}

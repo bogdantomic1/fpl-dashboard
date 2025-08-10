@@ -8,7 +8,7 @@ import {
   SelectItem,
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import ModeToggle from './modeToggle';
+
 import type { Team, Position } from '@/types/fpl';
 
 interface Props {
@@ -83,8 +83,6 @@ export default function FiltersBar({
           className="w-40"
         />
       </div>
-
-      <ModeToggle />
     </div>
   );
 }

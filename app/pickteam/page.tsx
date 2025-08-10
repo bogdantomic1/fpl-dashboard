@@ -1,504 +1,432 @@
-// app/pickteam/page.tsx
 'use client';
 
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  DndContext,
-  DragEndEvent,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import { useDraggable, useDroppable } from '@dnd-kit/core';
-import { CSS } from '@dnd-kit/utilities';
-
-import { Input } from '@/components/ui/input';
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 import {
   Table,
-  TableHeader,
-  TableRow,
-  TableHead,
   TableBody,
   TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/ui/table';
-import { X, Shirt, Info, ChevronLeft, ChevronRight } from 'lucide-react';
-
-/* ───────────────────────── Types ───────────────────────── */
+import './retro.css';
 
 type Player = {
   id: number;
-  first_name: string;
-  second_name: string;
   web_name: string;
-  element_type: 1 | 2 | 3 | 4; // 1 GKP, 2 DEF, 3 MID, 4 FWD
-  team: number;
   now_cost: number;
-  [key: string]: any;
+  team: number;
+  element_type: 1 | 2 | 3 | 4;
 };
 
-type Team = {
-  id: number;
-  name: string;
-  short_name?: string;
-};
-
+type Team = { id: number; name: string; short_name: string };
 type Fixture = {
   id: number;
-  kickoff_time: string;
+  finished: boolean;
+  kickoff_time: string | null;
   team_h: number;
   team_a: number;
-  team_h_difficulty: number;
-  team_a_difficulty: number;
   team_h_score: number | null;
   team_a_score: number | null;
-  finished: boolean;
+  team_h_difficulty: number;
+  team_a_difficulty: number;
 };
 
-type SlotType = 'GKP' | 'DEF' | 'MID' | 'FWD' | 'BEN';
-type Slot = { id: string; type: SlotType };
-
-/* ───────────────────── Helpers / constants ───────────────────── */
-
-const elementTypeToPos = (
-  et: Player['element_type']
-): Exclude<SlotType, 'BEN'> =>
-  et === 1 ? 'GKP' : et === 2 ? 'DEF' : et === 3 ? 'MID' : 'FWD';
-
-const formationOptions: Record<
-  string,
-  { gk: number; def: number; mid: number; fwd: number; bench: number }
-> = {
-  '4-4-2': { gk: 1, def: 4, mid: 4, fwd: 2, bench: 4 },
-  '3-5-2': { gk: 1, def: 3, mid: 5, fwd: 2, bench: 4 },
-  '5-3-2': { gk: 1, def: 5, mid: 3, fwd: 2, bench: 4 },
-  '4-3-3': { gk: 1, def: 4, mid: 3, fwd: 3, bench: 4 },
+const POS_LABEL: Record<1 | 2 | 3 | 4, 'GKP' | 'DEF' | 'MID' | 'FWD'> = {
+  1: 'GKP',
+  2: 'DEF',
+  3: 'MID',
+  4: 'FWD',
 };
 
-function buildSlots(form: keyof typeof formationOptions): Slot[] {
-  const cfg = formationOptions[form];
-  const out: Slot[] = [];
-  for (let i = 1; i <= cfg.gk; i++) out.push({ id: `gk-${i}`, type: 'GKP' });
-  for (let i = 1; i <= cfg.def; i++) out.push({ id: `def-${i}`, type: 'DEF' });
-  for (let i = 1; i <= cfg.mid; i++) out.push({ id: `mid-${i}`, type: 'MID' });
-  for (let i = 1; i <= cfg.fwd; i++) out.push({ id: `fwd-${i}`, type: 'FWD' });
-  for (let i = 1; i <= cfg.bench; i++)
-    out.push({ id: `ben-${i}`, type: 'BEN' });
-  return out;
-}
+type SlotType = 'GKP' | 'DEF' | 'MID' | 'FWD' | 'BENCH_GKP' | 'BENCH_ANY';
+type Slot = { id: string; type: SlotType; playerId: number | null };
 
-function useLocalStorage<T>(key: string, initial: T) {
-  const [state, setState] = useState<T>(() => {
-    if (typeof window === 'undefined') return initial;
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? (JSON.parse(raw) as T) : initial;
-    } catch {
-      return initial;
-    }
-  });
-  useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(state));
-    } catch {}
-  }, [key, state]);
-  return [state, setState] as const;
-}
+const formations: Record<string, { DEF: number; MID: number; FWD: number }> = {
+  '4-4-2': { DEF: 4, MID: 4, FWD: 2 },
+  '3-4-3': { DEF: 3, MID: 4, FWD: 3 },
+  '3-5-2': { DEF: 3, MID: 5, FWD: 2 },
+  '4-3-3': { DEF: 4, MID: 3, FWD: 3 },
+  '5-4-1': { DEF: 5, MID: 4, FWD: 1 },
+  '5-3-2': { DEF: 5, MID: 3, FWD: 2 },
+};
 
-/* ───────────────────────── DnD wrappers ───────────────────────── */
+const STORAGE_KEY = 'retro_pickteam_v3';
 
-function DraggableCard({
-  id,
-  children,
-  disabled,
-}: {
-  id: string;
-  children: React.ReactNode;
-  disabled?: boolean;
-}) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } =
-    useDraggable({
-      id,
-      disabled,
-    });
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    zIndex: isDragging ? 30 : undefined,
-    cursor: disabled ? 'not-allowed' : 'grab',
-  } as React.CSSProperties;
+const difficultyColors = [
+  '#0a7d33',
+  '#1b7a2f',
+  '#2c742a',
+  '#3d6c25',
+  '#4e6220',
+  '#5f561b',
+  '#704915',
+  '#813a0f',
+  '#922a09',
+  '#a31803',
+];
 
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...listeners}
-      {...attributes}
-      className="w-full h-full"
-    >
-      {children}
-    </div>
-  );
-}
-
-function DroppableSlot({
-  id,
-  children,
-}: {
-  id: string;
-  children: React.ReactNode;
-}) {
-  const { isOver, setNodeRef } = useDroppable({ id });
-  return (
-    <div
-      ref={setNodeRef}
-      className={`aspect-square w-24 md:w-28 rounded-md border border-dashed flex items-center justify-center transition-colors ${
-        isOver
-          ? 'border-primary/70 bg-primary/10'
-          : 'border-muted-foreground/20 bg-black/20'
-      }`}
-    >
-      {children}
-    </div>
-  );
-}
-
-/* ─────────────────────────── Page ─────────────────────────── */
+const jerseyImageMap: Record<number, { gk?: string; out?: string }> = {
+  1: { gk: '/arsenal_gk.webp', out: '/arsenal.webp' },
+  6: { gk: '/spurs_gk.webp', out: '/spurs.webp' },
+};
+const defaultJersey = '/jersey.webp';
 
 export default function PickTeamPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
-  const [formation, setFormation] = useLocalStorage<
-    keyof typeof formationOptions
-  >('formation', '4-4-2');
-  const [slots, setSlots] = useLocalStorage<Record<string, number | null>>(
-    'pickteam-slots',
-    {}
-  );
+
+  const [formation, setFormation] = useState<keyof typeof formations>('4-4-2');
+  const [slots, setSlots] = useState<Slot[]>([]);
+
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
+  const [teamFilter, setTeamFilter] = useState<'all' | string>('all');
   const [search, setSearch] = useState('');
-
-  // Table pagination
   const [page, setPage] = useState(1);
-  const pageSize = 12;
+  const pageSize = 8;
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
-  );
-
-  const pitchSlots = useMemo(() => buildSlots(formation), [formation]);
-
-  // Ensure slots object matches current formation
-  useEffect(() => {
-    setSlots((prev) => {
-      const next: Record<string, number | null> = { ...prev };
-      pitchSlots.forEach((s) => {
-        if (!(s.id in next)) next[s.id] = null;
-      });
-      Object.keys(next).forEach((k) => {
-        if (!pitchSlots.find((s) => s.id === k)) delete next[k];
-      });
-      return next;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pitchSlots.map((s) => s.id).join(',')]);
-
-  // Fetch data
   useEffect(() => {
     (async () => {
-      try {
-        const res = await fetch('/api/data', { cache: 'no-store' });
-        const data = await res.json();
-        setTeams(data.teams);
-        setPlayers(data.elements);
-      } catch (e) {
-        console.error(e);
-      }
-    })();
-
-    (async () => {
-      try {
-        const res = await fetch('/api/fixtures', { cache: 'no-store' });
-        const data = await res.json();
-        setFixtures(data);
-      } catch (e) {
-        console.error(e);
-      }
-    })();
+      const res = await fetch('/api/data', {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
+      const data = await res.json();
+      setPlayers(data.elements);
+      setTeams(data.teams);
+    })().catch(console.error);
   }, []);
 
-  const teamName = useCallback(
-    (teamId: number) =>
-      teams.find((t) => t.id === teamId)?.short_name ||
-      teams.find((t) => t.id === teamId)?.name ||
-      '',
-    [teams]
-  );
-
-  const getNextFixture = useCallback(
-    (teamId: number) => {
-      const upcoming = fixtures
-        .filter(
-          (f) => !f.finished && (f.team_h === teamId || f.team_a === teamId)
-        )
-        .sort(
-          (a, b) => Date.parse(a.kickoff_time) - Date.parse(b.kickoff_time)
-        )[0];
-      if (!upcoming) return '';
-      const isHome = upcoming.team_h === teamId;
-      const oppId = isHome ? upcoming.team_a : upcoming.team_h;
-      return `${teamName(oppId)} (${isHome ? 'H' : 'A'})`;
-    },
-    [fixtures, teamName]
-  );
-
-  const getPlayer = (id: number | null) => players.find((p) => p.id === id);
-
-  // Which slots are which row
-  const gkSlots = pitchSlots.filter((s) => s.type === 'GKP');
-  const defSlots = pitchSlots.filter((s) => s.type === 'DEF');
-  const midSlots = pitchSlots.filter((s) => s.type === 'MID');
-  const fwdSlots = pitchSlots.filter((s) => s.type === 'FWD');
-  const benSlots = pitchSlots.filter((s) => s.type === 'BEN');
-
-  // Enforce legal swaps
-  const isLegalTarget = (playerId: number, toSlotId: string) => {
-    const toSlot = pitchSlots.find((s) => s.id === toSlotId);
-    if (!toSlot) return false;
-    if (toSlot.type === 'BEN') return true;
-    const p = getPlayer(playerId);
-    if (!p) return false;
-    return elementTypeToPos(p.element_type) === toSlot.type;
-  };
-
-  const firstEmptySlotFor = (p: Player): string | null => {
-    const want = elementTypeToPos(p.element_type);
-    const slot = Object.keys(slots).find((sid) => {
-      const sType = pitchSlots.find((s) => s.id === sid)?.type;
-      return sType === want && !slots[sid];
-    });
-    // if no pitch slot free, try bench
-    if (!slot) {
-      const bench = Object.keys(slots).find((sid) => {
-        const sType = pitchSlots.find((s) => s.id === sid)?.type;
-        return sType === 'BEN' && !slots[sid];
+  useEffect(() => {
+    (async () => {
+      const res = await fetch('/api/fixtures', {
+        headers: { 'Cache-Control': 'no-cache' },
       });
-      return bench || null;
-    }
-    return slot;
+      const data: Fixture[] = await res.json();
+      setFixtures(data);
+    })().catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as { formation: string; slots: Slot[] };
+      if (parsed.formation && formations[parsed.formation])
+        setFormation(parsed.formation as any);
+      if (parsed.slots?.length) setSlots(parsed.slots);
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ formation, slots }));
+    } catch {}
+  }, [formation, slots]);
+
+  const teamMap = useMemo(() => {
+    const m: Record<number, Team> = {};
+    teams.forEach((t) => (m[t.id] = t));
+    return m;
+  }, [teams]);
+
+  const getPlayer = (id: number | null) =>
+    players.find((p) => p.id === id) || null;
+
+  const buildSlots = (fmt: keyof typeof formations, prev: Slot[]) => {
+    const preset = formations[fmt];
+    const next: Slot[] = [];
+    next.push({ id: 'S-GKP-1', type: 'GKP', playerId: null });
+    for (let i = 1; i <= preset.DEF; i++)
+      next.push({ id: `S-DEF-${i}`, type: 'DEF', playerId: null });
+    for (let i = 1; i <= preset.MID; i++)
+      next.push({ id: `S-MID-${i}`, type: 'MID', playerId: null });
+    for (let i = 1; i <= preset.FWD; i++)
+      next.push({ id: `S-FWD-${i}`, type: 'FWD', playerId: null });
+    next.push({ id: 'B-GKP-1', type: 'BENCH_GKP', playerId: null });
+    next.push({ id: 'B-ANY-1', type: 'BENCH_ANY', playerId: null });
+    next.push({ id: 'B-ANY-2', type: 'BENCH_ANY', playerId: null });
+    next.push({ id: 'B-ANY-3', type: 'BENCH_ANY', playerId: null });
+
+    //const buckets = { GKP: <number[]>[], DEF: <number[]>[], MID: <number[]>[], FWD: <number[]>[], BENCH: <number[]>[] };
+    const buckets = {
+      GKP: [] as number[],
+      DEF: [] as number[],
+      MID: [] as number[],
+      FWD: [] as number[],
+      BENCH: [] as number[],
+    };
+    prev.forEach((s) => {
+      if (!s.playerId) return;
+      const p = getPlayer(s.playerId);
+      if (!p) return;
+      const pos = POS_LABEL[p.element_type];
+      if (s.type.startsWith('BENCH')) buckets.BENCH.push(p.id);
+      else buckets[pos].push(p.id);
+    });
+
+    const place = (type: SlotType, ids: number[]) => {
+      next.forEach((s) => {
+        if (s.type === type && !s.playerId && ids.length)
+          s.playerId = ids.shift()!;
+      });
+    };
+    place('GKP', buckets.GKP);
+    place('DEF', buckets.DEF);
+    place('MID', buckets.MID);
+    place('FWD', buckets.FWD);
+    place('BENCH_GKP', buckets.GKP);
+    const rest = [
+      ...buckets.DEF,
+      ...buckets.MID,
+      ...buckets.FWD,
+      ...buckets.BENCH,
+    ];
+    place('BENCH_ANY', rest);
+
+    return next;
   };
 
-  const handleDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e;
-    if (!over) return;
+  useEffect(() => {
+    setSlots((prev) => buildSlots(formation, prev.length ? prev : []));
+  }, [formation]);
 
-    const activeId = String(active.id);
-    const overId = String(over.id);
-
-    // FROM a slot
-    if (activeId.startsWith('slot-')) {
-      const fromSlotId = activeId.replace('slot-', '');
-      const fromPlayerId = slots[fromSlotId];
-      if (!fromPlayerId) return;
-
-      if (overId.startsWith('slot-')) {
-        const toSlotId = overId.replace('slot-', '');
-        if (!isLegalTarget(fromPlayerId, toSlotId)) return;
-
-        setSlots((prev) => {
-          const next = { ...prev };
-          const otherPlayer = next[toSlotId];
-          next[toSlotId] = fromPlayerId;
-          next[fromSlotId] = otherPlayer ?? null;
-          return next;
-        });
-      }
-      return;
-    }
-
-    // FROM table list – (we don't drag rows; ignore)
+  const openPicker = (slotId: string) => {
+    setActiveSlotId(slotId);
+    setPickerOpen(true);
   };
 
-  const removePlayer = (pid: number) => {
+  const canSlotTake = (slot: Slot, p: Player) => {
+    const pos = POS_LABEL[p.element_type];
+    if (slot.type === 'GKP') return pos === 'GKP';
+    if (slot.type === 'DEF') return pos === 'DEF';
+    if (slot.type === 'MID') return pos === 'MID';
+    if (slot.type === 'FWD') return pos === 'FWD';
+    if (slot.type === 'BENCH_GKP') return pos === 'GKP';
+    return true;
+  };
+
+  const assignToActiveSlot = (playerId: number) => {
+    if (!activeSlotId) return;
     setSlots((prev) => {
-      const next = { ...prev };
-      Object.keys(next).forEach((sid) => {
-        if (next[sid] === pid) next[sid] = null;
-      });
-      return next;
+      const copy = [...prev];
+      const sIdx = copy.findIndex((s) => s.id === activeSlotId);
+      if (sIdx < 0) return prev;
+      const slot = copy[sIdx];
+      const p = getPlayer(playerId);
+      if (!p || !canSlotTake(slot, p)) return prev;
+      const prevIdx = copy.findIndex((s) => s.playerId === playerId);
+      if (prevIdx >= 0) copy[prevIdx] = { ...copy[prevIdx], playerId: null };
+      copy[sIdx] = { ...copy[sIdx], playerId };
+      return copy;
     });
+    setPickerOpen(false);
   };
 
-  const addFromTable = (p: Player) => {
-    const dest = firstEmptySlotFor(p);
-    if (!dest) {
-      alert('No suitable empty slot available.');
-      return;
-    }
-    setSlots((prev) => ({ ...prev, [dest]: p.id }));
-  };
+  const clearSlot = (slotId: string) =>
+    setSlots((prev) =>
+      prev.map((s) => (s.id === slotId ? { ...s, playerId: null } : s))
+    );
 
-  /* ───────────── Right pane: table data, search & pagination ───────────── */
+  const sendToBench = (slotId: string) =>
+    setSlots((prev) => {
+      const copy = [...prev];
+      const fromIdx = copy.findIndex((s) => s.id === slotId);
+      if (fromIdx < 0 || !copy[fromIdx].playerId) return prev;
+      const pid = copy[fromIdx].playerId!;
+      const p = getPlayer(pid)!;
+      const benchTarget =
+        p.element_type === 1
+          ? copy.find((s) => s.type === 'BENCH_GKP' && !s.playerId)
+          : copy.find((s) => s.type === 'BENCH_ANY' && !s.playerId);
+      if (!benchTarget) return prev;
+      copy[fromIdx] = { ...copy[fromIdx], playerId: null };
+      benchTarget.playerId = pid;
+      return copy;
+    });
 
-  const selectedIds = useMemo(
-    () => new Set(Object.values(slots).filter(Boolean) as number[]),
+  const starters = useMemo(
+    () => slots.filter((s) => s.id.startsWith('S-')),
+    [slots]
+  );
+  const bench = useMemo(
+    () => slots.filter((s) => s.id.startsWith('B-')),
     [slots]
   );
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return players.filter((p) => {
-      const nm = (
-        p.web_name ||
-        `${p.first_name} ${p.second_name}` ||
-        ''
-      ).toLowerCase();
-      const tm = teamName(p.team).toLowerCase();
-      return nm.includes(q) || tm.includes(q);
-    });
-  }, [players, search, teamName]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [totalPages, page]);
-
-  const pageSlice = useMemo(
-    () => filtered.slice((page - 1) * pageSize, page * pageSize),
-    [filtered, page]
+  const activeSlot = slots.find((s) => s.id === activeSlotId) || null;
+  const pickedIds = useMemo(
+    () => new Set(slots.map((s) => s.playerId).filter(Boolean) as number[]),
+    [slots]
   );
 
-  function Row({
-    title,
-    children,
-  }: {
-    title: string;
-    children: React.ReactNode;
-  }) {
+  const pickerList = useMemo(() => {
+    if (!activeSlot) return [];
+    return players
+      .filter((p) => canSlotTake(activeSlot, p))
+      .filter((p) =>
+        teamFilter === 'all' ? true : String(p.team) === teamFilter
+      )
+      .filter((p) =>
+        search ? p.web_name.toLowerCase().includes(search.toLowerCase()) : true
+      )
+      .sort((a, b) => a.web_name.localeCompare(b.web_name));
+  }, [activeSlot, players, teamFilter, search]);
+
+  const pickerTotalPages = Math.ceil(pickerList.length / pageSize) || 1;
+  const pageRows = pickerList.slice((page - 1) * pageSize, page * pageSize);
+  useEffect(() => setPage(1), [teamFilter, search, activeSlotId]);
+
+  const diff5To10 = (five: number) => Math.min(10, Math.max(1, five * 2));
+
+  const upcoming4 = (teamId: number) =>
+    fixtures
+      .filter(
+        (f) => !f.finished && (f.team_h === teamId || f.team_a === teamId)
+      )
+      .sort(
+        (a, b) =>
+          (a.kickoff_time ? Date.parse(a.kickoff_time) : 0) -
+          (b.kickoff_time ? Date.parse(b.kickoff_time) : 0)
+      )
+      .slice(0, 4);
+
+  const getLast4Points = (_playerId: number): number[] => {
+    return []; // wire later
+  };
+
+  const jerseySrc = (p: Player | null) => {
+    if (!p) return defaultJersey;
+    const entry = jerseyImageMap[p.team];
+    if (!entry) return defaultJersey;
+    return p.element_type === 1
+      ? (entry.gk ?? entry.out ?? defaultJersey)
+      : (entry.out ?? defaultJersey);
+  };
+
+  const JerseyCard = ({ slot }: { slot: Slot }) => {
+    const p = getPlayer(slot.playerId);
+    const next = p ? upcoming4(p.team) : [];
+    const lastPts = p ? getLast4Points(p.id) : [];
+
     return (
-      <div className="my-3">
-        <div className="text-center text-[10px] md:text-xs mb-2 opacity-80">
-          {title}
-        </div>
-        <div className="flex justify-center gap-5 md:gap-8">{children}</div>
-      </div>
-    );
-  }
-
-  function PlayerCard({
-    player,
-    nextFixture,
-    onRemove,
-    draggableId,
-  }: {
-    player: Player;
-    nextFixture: string;
-    onRemove?: () => void;
-    draggableId: string;
-  }) {
-    return (
-      <DraggableCard id={draggableId}>
-        <div className="relative w-full h-full rounded-md bg-white/90 dark:bg-neutral-900/90 shadow flex items-center justify-center p-2">
-          <div className="absolute left-2 top-2 text-muted-foreground">
-            <div className="w-6 h-6 rounded bg-muted flex items-center justify-center">
-              <Shirt className="w-4 h-4 opacity-70" />
-            </div>
-          </div>
-
-          <div className="flex flex-col items-center text-center px-3">
-            <div className="text-[11px] md:text-sm font-semibold truncate max-w-[96px]">
-              {player.web_name}
-            </div>
-            <div className="text-[10px] text-muted-foreground mt-0.5 truncate max-w-[96px]">
-              {nextFixture || '\u00A0'}
-            </div>
-          </div>
-
-          <div className="absolute right-2 top-2 flex items-center gap-1">
-            {onRemove && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-6 w-6"
-                title="Remove"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onRemove();
-                }}
+      <div className="retro-card-wrap retro-card-wrap--wide">
+        {/* rails show on hover, stay inside card */}
+        <div className="retro-rail retro-rail--left">
+          {(p && lastPts.length ? lastPts : Array(4).fill('-')).map(
+            (val, i) => (
+              <div
+                key={i}
+                className={`retro-chip ${val === '-' ? 'retro-chip--empty' : 'pts'}`}
               >
-                <X className="w-4 h-4" />
-              </Button>
-            )}
-            <Button
-              variant="secondary"
-              size="sm"
-              className="h-6 px-2"
-              title="Details"
-              onClick={(e) => {
-                e.stopPropagation();
-                alert(`Details for ${player.web_name}`);
-              }}
-            >
-              <Info className="w-3 h-3 mr-1" />
-              Details
-            </Button>
-          </div>
+                {val}
+              </div>
+            )
+          )}
         </div>
-      </DraggableCard>
-    );
-  }
 
-  function EmptyCard({ label }: { label: string }) {
-    return (
-      <div className="w-full h-full rounded-md border border-dashed border-muted-foreground/20 bg-black/10 flex flex-col items-center justify-center text-muted-foreground">
-        <div className="text-[11px] md:text-xs">{label}</div>
-        <div className="text-[10px] opacity-60">Empty</div>
-      </div>
-    );
-  }
+        {/* NEW: actions row (Sub / Remove) */}
+        <div className="retro-actions">
+          <Button
+            size="sm"
+            variant="secondary"
+            className="retro-action-btn"
+            onClick={() => sendToBench(slot.id)}
+            disabled={!slot.playerId}
+            title="Send to bench"
+          >
+            S
+          </Button>
+          <Button
+            size="sm"
+            className="retro-action-btn retro-action-btn--danger"
+            onClick={() => clearSlot(slot.id)}
+            disabled={!slot.playerId}
+            title="Remove"
+          >
+            X
+          </Button>
+        </div>
 
-  const slotTile = (sid: string, type: SlotType) => {
-    const pid = slots[sid];
-    const p = getPlayer(pid ?? null);
-    return (
-      <DroppableSlot key={sid} id={`slot-${sid}`}>
-        {p ? (
-          <PlayerCard
-            player={p}
-            nextFixture={getNextFixture(p.team)}
-            draggableId={`slot-${sid}`}
-            onRemove={() => removePlayer(p.id)}
+        {/* jersey */}
+        <button className="retro-jersey" onClick={() => openPicker(slot.id)}>
+          <div
+            className="retro-jersey__img"
+            style={{ backgroundImage: `url('${jerseySrc(p)}')` }}
+            aria-hidden
           />
-        ) : (
-          <EmptyCard label={type === 'BEN' ? 'BEN' : type} />
-        )}
-      </DroppableSlot>
+        </button>
+
+        {/* NEW: name bar (always under jersey, full width, ellipsis) */}
+        <div
+          className="retro-namebar"
+          title={p ? p.web_name : slot.type.replace('BENCH_', '')}
+        >
+          {p ? p.web_name : slot.type.replace('BENCH_', '')}
+        </div>
+
+        {/* right rail (upcoming fixtures) */}
+        <div className="retro-rail retro-rail--right">
+          {(p && next.length ? next : Array(4).fill(null)).map((fx, i) => {
+            if (!fx)
+              return (
+                <div key={i} className="retro-chip retro-chip--empty">
+                  -
+                </div>
+              );
+            const isHome = fx.team_h === p!.team;
+            const oppId = isHome ? fx.team_a : fx.team_h;
+            const opp = teamMap[oppId]?.short_name ?? '???';
+            const five = isHome ? fx.team_h_difficulty : fx.team_a_difficulty;
+            const ten = diff5To10(five);
+            const color = difficultyColors[ten - 1];
+            return (
+              <div
+                key={fx.id}
+                className="retro-chip"
+                style={{ backgroundColor: color }}
+              >
+                {opp} ({isHome ? 'H' : 'A'})
+              </div>
+            );
+          })}
+        </div>
+      </div>
     );
   };
 
   return (
-    <div className="p-4 md:p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">Pick Team</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-sm opacity-80">Formation</span>
+    <div className="retro retro-light dark:retro-dark">
+      <div className="retro-header">
+        <div className="retro-title">Pick Team</div>
+        <div className="retro-right">
+          <span className="retro-label">Formation</span>
           <Select
             value={formation}
-            onValueChange={(v: keyof typeof formationOptions) =>
-              setFormation(v)
-            }
+            onValueChange={(v) => setFormation(v as any)}
           >
-            <SelectTrigger className="w-28">
+            <SelectTrigger className="retro-select">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.keys(formationOptions).map((f) => (
+              {Object.keys(formations).map((f) => (
                 <SelectItem key={f} value={f}>
                   {f}
                 </SelectItem>
@@ -508,155 +436,159 @@ export default function PickTeamPage() {
         </div>
       </div>
 
-      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
-        {/* Pitch */}
-        <div className="rounded-lg border bg-[rgb(0,40,35)]/85 p-4 md:p-6">
-          <Row title="GOALKEEPERS">
-            {gkSlots.map((s) => slotTile(s.id, s.type))}
-          </Row>
-          <Row title="DEFENDERS">
-            {defSlots.map((s) => slotTile(s.id, s.type))}
-          </Row>
-          <Row title="MIDFIELDERS">
-            {midSlots.map((s) => slotTile(s.id, s.type))}
-          </Row>
-          <Row title="FORWARDS">
-            {fwdSlots.map((s) => slotTile(s.id, s.type))}
-          </Row>
-          <Row title="BENCH">{benSlots.map((s) => slotTile(s.id, s.type))}</Row>
-        </div>
+      <div className="retro-pitch">
+        <div className="retro-pitch__bg" />
+        <div className="retro-pitch__rows">
+          <div className="retro-row">
+            {starters
+              .filter((s) => s.type === 'GKP')
+              .map((s) => (
+                <JerseyCard key={s.id} slot={s} />
+              ))}
+          </div>
+          <div className="retro-row">
+            {starters
+              .filter((s) => s.type === 'DEF')
+              .map((s) => (
+                <JerseyCard key={s.id} slot={s} />
+              ))}
+          </div>
+          <div className="retro-row">
+            {starters
+              .filter((s) => s.type === 'MID')
+              .map((s) => (
+                <JerseyCard key={s.id} slot={s} />
+              ))}
+          </div>
+          <div className="retro-row">
+            {starters
+              .filter((s) => s.type === 'FWD')
+              .map((s) => (
+                <JerseyCard key={s.id} slot={s} />
+              ))}
+          </div>
 
-        {/* Players table */}
-        <div className="mt-6">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <Input
-              placeholder="Search by name or team…"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="max-w-sm"
-            />
-            <div className="text-sm opacity-70">
-              Showing {filtered.length} players
+          <div className="retro-bench">
+            {bench.map((s) => (
+              <div key={s.id} className="retro-bench__cell">
+                <JerseyCard slot={s} />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Picker */}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Select Player</DialogTitle>
+            <DialogDescription>
+              {activeSlot
+                ? `Choose a ${activeSlot.type.replace('BENCH_', '')}`
+                : ''}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-wrap items-end gap-3 mb-3">
+            <div className="w-52">
+              <label className="retro-small">Team</label>
+              <Select value={teamFilter} onValueChange={setTeamFilter}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="All teams" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All</SelectItem>
+                  {teams.map((t) => (
+                    <SelectItem key={t.id} value={String(t.id)}>
+                      {t.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-            <div className="ml-auto flex items-center gap-2">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                disabled={page === 1}
-              >
-                <ChevronLeft className="w-4 h-4 mr-1" />
-                Prev
-              </Button>
-              <span className="text-sm opacity-80">
-                Page {page} / {totalPages}
-              </span>
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                disabled={page === totalPages}
-              >
-                Next
-                <ChevronRight className="w-4 h-4 ml-1" />
-              </Button>
+            <div className="flex-1 min-w-[220px]">
+              <label className="retro-small">Search</label>
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Name…"
+              />
             </div>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border bg-white dark:bg-neutral-950">
+          <div className="rounded-lg border">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-20"></TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Team</TableHead>
-                  <TableHead className="hidden md:table-cell">Pos</TableHead>
-                  <TableHead className="hidden md:table-cell">Price</TableHead>
-                  <TableHead className="hidden sm:table-cell">
-                    Next Fixture
-                  </TableHead>
-                  <TableHead className="text-right">Action</TableHead>
+                  <TableHead>Pos</TableHead>
+                  <TableHead className="text-right">Price</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {pageSlice.map((p) => {
-                  const placed = selectedIds.has(p.id);
-                  const pos = elementTypeToPos(p.element_type);
-                  const price = (p.now_cost / 10).toFixed(1);
-                  const nf = getNextFixture(p.team);
-
-                  return (
-                    <TableRow key={p.id}>
-                      <TableCell className="whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <div className="w-6 h-6 rounded bg-muted flex items-center justify-center">
-                            <Shirt className="w-4 h-4 opacity-70" />
-                          </div>
-                          <div className="font-medium">{p.web_name}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="whitespace-nowrap">
-                        {teamName(p.team)}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {pos}
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        {price}m
-                      </TableCell>
-                      <TableCell className="hidden sm:table-cell">
-                        {nf}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          {placed ? (
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              title="Remove"
-                              onClick={() => removePlayer(p.id)}
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              onClick={() => addFromTable(p)}
-                              title="Add to first suitable slot"
-                            >
-                              Add
-                            </Button>
-                          )}
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => alert(`Details for ${p.web_name}`)}
-                          >
-                            <Info className="w-4 h-4 mr-1" />
-                            Details
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {pageSlice.length === 0 && (
+                {pageRows.length === 0 ? (
                   <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="text-center text-sm text-muted-foreground"
-                    >
-                      No players.
-                    </TableCell>
+                    <TableCell colSpan={5}>No players</TableCell>
                   </TableRow>
+                ) : (
+                  pageRows.map((p) => {
+                    const taken = pickedIds.has(p.id);
+                    return (
+                      <TableRow
+                        key={p.id}
+                        className={taken ? 'opacity-60' : ''}
+                      >
+                        <TableCell>
+                          <Button
+                            size="sm"
+                            disabled={taken}
+                            onClick={() => assignToActiveSlot(p.id)}
+                          >
+                            {taken ? 'In squad' : 'Select'}
+                          </Button>
+                        </TableCell>
+                        <TableCell>{p.web_name}</TableCell>
+                        <TableCell>
+                          {teamMap[p.team]?.short_name ?? ''}
+                        </TableCell>
+                        <TableCell>{POS_LABEL[p.element_type]}</TableCell>
+                        <TableCell className="text-right">
+                          {(p.now_cost / 10).toFixed(1)}m
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
+
+            <div className="flex items-center justify-between p-3">
+              <Button
+                variant="secondary"
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+              >
+                Prev
+              </Button>
+              <div className="text-sm">
+                Page {page} / {pickerTotalPages}
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() =>
+                  setPage((p) => Math.min(pickerTotalPages, p + 1))
+                }
+                disabled={page === pickerTotalPages}
+              >
+                Next
+              </Button>
+            </div>
           </div>
-        </div>
-      </DndContext>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

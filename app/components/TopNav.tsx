@@ -10,6 +10,7 @@ import {
   NavigationMenuLink,
   navigationMenuTriggerStyle,
 } from '@/components/ui/navigation-menu';
+import ModeToggle from './modeToggle';
 
 export default function TopNav() {
   return (
@@ -45,8 +46,30 @@ export default function TopNav() {
                       </NavigationMenuLink>
                     </Link>
                   </li>
+                  <li>
+                    <Link href="/squadbuilder" legacyBehavior passHref>
+                      <NavigationMenuLink className="block rounded-md p-3 hover:bg-muted">
+                        <div className="text-sm font-medium leading-none">
+                          Squad builder
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground leading-snug">
+                          Use our squad builder to simulate your team for the
+                          next gameweek. Get suggestions based on your current
+                          squad and the latest data.
+                        </p>
+                      </NavigationMenuLink>
+                    </Link>
+                  </li>
                 </ul>
               </NavigationMenuContent>
+            </NavigationMenuItem>
+
+            <NavigationMenuItem>
+              <Link href="/fixtures" legacyBehavior passHref>
+                <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+                  Fixtures
+                </NavigationMenuLink>
+              </Link>
             </NavigationMenuItem>
 
             {/* Docs */}
@@ -60,6 +83,8 @@ export default function TopNav() {
           </NavigationMenuList>
         </NavigationMenu>
       </div>
+
+      <ModeToggle />
     </div>
   );
 }
