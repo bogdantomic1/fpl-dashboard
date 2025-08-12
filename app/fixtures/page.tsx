@@ -14,15 +14,21 @@ type Team = {
   id: number;
   name: string;
   short_name: string;
+  strength_overall_home: number;
+  strength_overall_away: number;
+  strength_attack_home: number;
+  strength_attack_away: number;
+  strength_defence_home: number;
+  strength_defence_away: number;
 };
 
 type Fixture = {
   id: number;
-  event: number | null; // 1..38 or null
+  event: number | null;
   team_h: number;
   team_a: number;
-  team_h_difficulty: number; // 1..5
-  team_a_difficulty: number; // 1..5
+  team_h_difficulty: number; // not used for calc now (we compute our own)
+  team_a_difficulty: number;
   team_h_score: number | null;
   team_a_score: number | null;
   finished: boolean;
@@ -32,12 +38,22 @@ type Fixture = {
 type CellItem = {
   oppShort: string;
   venue: 'H' | 'A';
-  diff10: number; // 1..10 (for upcoming only)
   finished: boolean;
-  scoreText?: string; // e.g. "1–2"
+  scoreText?: string;
+
+  // New absolute difficulty pieces:
+  attRaw?: number; // lower is easier
+  defRaw?: number; // lower is easier
+  ovRaw?: number; // lower is easier (α·1/xGFp + β·xGAp)
+
+  // After per-GW ranking:
+  rank?: number; // 1..20 (1 easiest)
+  att10?: number; // display helper (1..10) from rank
+  def10?: number;
+  ov10?: number;
 };
 
-type Grid = Record<number, Record<number, CellItem[]>>; // teamId -> gw -> items[]
+type Grid = Record<number, Record<number, CellItem[]>>;
 
 const difficultyColors = [
   '#0a7d33',
@@ -54,14 +70,22 @@ const difficultyColors = [
 
 const clamp = (n: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, n));
-const fiveToTen = (x: number) => clamp(Math.round(x * 2), 1, 10);
+const round2 = (n: number) => Math.round(n * 100) / 100;
+const rankTo10 = (rank: number) => clamp(Math.ceil(rank / 2), 1, 10); // 1..20 → 1..10
+
+// bounded exp(log ratio)
+function boundedRatio(a: number, b: number, L = 0.7) {
+  const la = Math.log(Math.max(1, a));
+  const lb = Math.log(Math.max(1, b));
+  const z = clamp(la - lb, -L, L);
+  return Math.exp(z);
+}
 
 export default function FixturesPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Scroll container + refs to each GW header cell
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const headerRefs = useRef<Record<number, HTMLTableCellElement | null>>({});
 
@@ -90,28 +114,25 @@ export default function FixturesPage() {
     return m;
   }, [teams]);
 
-  // Determine the "next gameweek": earliest event with an upcoming/unfinished match
-  const nextGW = useMemo(() => {
-    const now = Date.now();
-    const candidateEvents = fixtures
-      .filter((f: Fixture) => f.event != null && !f.finished)
-      .filter((f) =>
-        f.kickoff_time ? Date.parse(f.kickoff_time) >= now : true
-      )
-      .map((f) => f.event as number);
+  // const nextGW = useMemo(() => {
+  //   const now = Date.now();
+  //   const candidates = fixtures
+  //     .filter((f) => f.event != null && !f.finished)
+  //     .filter((f) =>
+  //       f.kickoff_time ? Date.parse(f.kickoff_time) >= now : true
+  //     )
+  //     .map((f) => f.event as number);
+  //   if (!candidates.length) {
+  //     const any = fixtures
+  //       .filter((f) => f.event != null)
+  //       .map((f) => f.event as number);
+  //     return any.length ? Math.min(...any) : 1;
+  //   }
+  //   return Math.min(...candidates);
+  // }, [fixtures]);
 
-    if (candidateEvents.length === 0) {
-      const anyEvents = fixtures
-        .filter((f) => f.event != null)
-        .map((f) => f.event as number);
-      if (anyEvents.length === 0) return 1;
-      return Math.min(38, Math.max(1, Math.min(...anyEvents)));
-    }
-    return Math.min(...candidateEvents);
-  }, [fixtures]);
-
-  // Build grid with doubles/blanks + finished score handling
-  const grid: Grid = useMemo(() => {
+  // STEP 1: build base grid & compute raw difficulties per match (unfinished only)
+  const gridBase: Grid = useMemo(() => {
     if (!teams.length) return {};
     const base: Grid = {};
     teams.forEach((t) => {
@@ -119,87 +140,190 @@ export default function FixturesPage() {
       for (let gw = 1; gw <= 38; gw++) base[t.id][gw] = [];
     });
 
-    fixtures.forEach((f: Fixture) => {
+    fixtures.forEach((f) => {
       if (!f.event) return;
       const gw = f.event;
+      const home = teamMap[f.team_h];
+      const away = teamMap[f.team_a];
+      if (!home || !away) return;
 
-      // Home row
-      const oppA = teamMap[f.team_a];
-      if (oppA) {
+      // HOME row
+      {
         const finished = !!f.finished;
-        const labelScore = finished
-          ? `${f.team_h_score ?? 0}–${f.team_a_score ?? 0}`
-          : undefined;
-
-        base[f.team_h][gw].push({
-          oppShort: oppA.short_name,
+        const item: CellItem = {
+          oppShort: away.short_name,
           venue: 'H',
-          diff10: finished ? 0 : fiveToTen(f.team_h_difficulty),
           finished,
-          scoreText: labelScore,
-        });
+          scoreText: finished
+            ? `${f.team_h_score ?? 0}–${f.team_a_score ?? 0}`
+            : undefined,
+        };
+
+        if (!finished) {
+          // xGF proxy (home trying to score) = boundedRatio(home.att_home, away.def_away)
+          const xGFp = boundedRatio(
+            home.strength_attack_home ?? 1,
+            away.strength_defence_away ?? 1
+          );
+          // xGA proxy (home likely to concede) = boundedRatio(away.att_away, home.def_home)
+          const xGAp = boundedRatio(
+            away.strength_attack_away ?? 1,
+            home.strength_defence_home ?? 1
+          );
+
+          const alpha = 0.45,
+            beta = 0.55;
+          const attRaw = 1 / xGFp; // harder if we can’t create
+          const defRaw = xGAp; // harder if likely to concede
+          const ovRaw = alpha * attRaw + beta * defRaw;
+
+          item.attRaw = attRaw;
+          item.defRaw = defRaw;
+          item.ovRaw = ovRaw;
+        }
+
+        base[f.team_h][gw].push(item);
       }
 
-      // Away row
-      const oppH = teamMap[f.team_h];
-      if (oppH) {
+      // AWAY row
+      {
         const finished = !!f.finished;
-        const labelScore = finished
-          ? `${f.team_a_score ?? 0}–${f.team_h_score ?? 0}`
-          : undefined;
-
-        base[f.team_a][gw].push({
-          oppShort: oppH.short_name,
+        const item: CellItem = {
+          oppShort: home.short_name,
           venue: 'A',
-          diff10: finished ? 0 : fiveToTen(f.team_a_difficulty),
           finished,
-          scoreText: labelScore,
-        });
+          scoreText: finished
+            ? `${f.team_a_score ?? 0}–${f.team_h_score ?? 0}`
+            : undefined,
+        };
+
+        if (!finished) {
+          const xGFp = boundedRatio(
+            away.strength_attack_away ?? 1,
+            home.strength_defence_home ?? 1
+          );
+          const xGAp = boundedRatio(
+            home.strength_attack_home ?? 1,
+            away.strength_defence_away ?? 1
+          );
+
+          const alpha = 0.45,
+            beta = 0.55;
+          const attRaw = 1 / xGFp;
+          const defRaw = xGAp;
+          const ovRaw = alpha * attRaw + beta * defRaw;
+
+          item.attRaw = attRaw;
+          item.defRaw = defRaw;
+          item.ovRaw = ovRaw;
+        }
+
+        base[f.team_a][gw].push(item);
       }
     });
 
     return base;
   }, [teams, fixtures, teamMap]);
 
-  // NEW: rank teams by TOTAL difficulty of their next 4 upcoming matches from nextGW (counts doubles)
+  // STEP 2: per-GW ranking (absolute across the league). Handle doubles by averaging raws first.
+  const gridRanked: Grid = useMemo(() => {
+    // For each GW, compute average attRaw/defRaw/ovRaw per team, then rank ovRaw (1..20).
+    const out: Grid = JSON.parse(JSON.stringify(gridBase)); // shallow copy structure
+    for (let gw = 1; gw <= 38; gw++) {
+      const rows: { teamId: number; att: number; def: number; ov: number }[] =
+        [];
+
+      teams.forEach((t) => {
+        const items = (gridBase[t.id]?.[gw] ?? []).filter(
+          (x) => !x.finished && x.ovRaw != null
+        );
+        if (!items.length) return;
+
+        const att =
+          items.reduce((s, x) => s + (x.attRaw as number), 0) / items.length;
+        const def =
+          items.reduce((s, x) => s + (x.defRaw as number), 0) / items.length;
+        const ov =
+          items.reduce((s, x) => s + (x.ovRaw as number), 0) / items.length;
+
+        rows.push({ teamId: t.id, att, def, ov });
+      });
+
+      // lower raw = easier → rank ascending
+      rows.sort((a, b) => a.ov - b.ov || a.teamId - b.teamId);
+      const rankMap: Record<number, number> = {};
+      rows.forEach((r, i) => (rankMap[r.teamId] = i + 1));
+
+      // write back ranks & 10-scale color helper (by rank)
+      teams.forEach((t) => {
+        const bucket = out[t.id]?.[gw];
+        if (!bucket) return;
+        const r = rankMap[t.id];
+        if (!r) return; // no unfinished fixtures for that team in this GW
+
+        // Use rank->10 mapping for display
+        const ov10 = rankTo10(r);
+
+        // derive att/def on 10-scale with same rank color (or you can build separate ranks if you want)
+        // Here, we keep att10/def10 from their own raws but mapped by team’s OV rank color for consistency.
+        bucket.forEach((it) => {
+          if (it.finished) return;
+          it.rank = r;
+          it.ov10 = ov10;
+          // Optional: if you want separate att/def ranks, compute them similarly; for now use ov10 color.
+          it.att10 = ov10;
+          it.def10 = ov10;
+        });
+      });
+    }
+    return out;
+  }, [gridBase, teams]);
+
+  // Ranking by next 4 using new ov10 (rank-based color)
+  const nextGW = useMemo(() => {
+    const now = Date.now();
+    const candidates = fixtures
+      .filter((f) => f.event != null && !f.finished)
+      .filter((f) =>
+        f.kickoff_time ? Date.parse(f.kickoff_time) >= now : true
+      )
+      .map((f) => f.event as number);
+    if (!candidates.length) {
+      const any = fixtures
+        .filter((f) => f.event != null)
+        .map((f) => f.event as number);
+      return any.length ? Math.min(...any) : 1;
+    }
+    return Math.min(...candidates);
+  }, [fixtures]);
+
   const nextFourRanks = useMemo(() => {
     if (!teams.length) return [];
-    // For each team, build a flat list of its upcoming fixtures from nextGW onward (unfinished only)
     const rows = teams.map((t) => {
       const upcoming: { gw: number; label: string; diff10: number }[] = [];
-
       for (let gw = nextGW; gw <= 38; gw++) {
-        const cells = grid[t.id]?.[gw] ?? [];
-        // In case of doubles, we’ll have 2+ items — push all unfinished ones
+        const cells = gridRanked[t.id]?.[gw] ?? [];
         cells.forEach((it) => {
-          if (!it.finished) {
+          if (!it.finished && it.ov10 != null) {
             upcoming.push({
               gw,
               label: `${it.oppShort} (${it.venue})`,
-              diff10: it.diff10,
+              diff10: it.ov10!,
             });
           }
         });
         if (upcoming.length >= 4) break;
       }
-
       const slice4 = upcoming.slice(0, 4);
       const total = slice4.reduce((s, x) => s + x.diff10, 0);
-      return {
-        teamId: t.id,
-        team: t.name,
-        items: slice4, // up to 4 entries
-        total,
-      };
+      return { teamId: t.id, team: t.name, items: slice4, total };
     });
-
-    // Sort easiest first (lowest total)
     rows.sort((a, b) => a.total - b.total || a.team.localeCompare(b.team));
     return rows;
-  }, [teams, grid, nextGW]);
+  }, [teams, gridRanked, nextGW]);
 
-  // After header cells exist, scroll so nextGW header is placed at the left edge
-  const scrollRefCurrent = scrollRef.current; // to satisfy deps
+  // Auto-scroll to next GW
+  const scrollRefCurrent = scrollRef.current;
   useEffect(() => {
     const scroller = scrollRef.current;
     const headerCell = headerRefs.current[nextGW];
@@ -237,14 +361,14 @@ export default function FixturesPage() {
           10 (hardest)
         </span>
         <span className="text-muted-foreground">
-          Finished fixtures show scores without color. Next GW highlighted.
+          Finished fixtures show scores. Next GW highlighted.
         </span>
         <span className="ml-auto text-muted-foreground">
           Next GW: <b>GW{nextGW}</b>
         </span>
       </div>
 
-      {/* NEW: Ranking by total difficulty of next 4 */}
+      {/* Ranking by total difficulty of next 4 */}
       <div className="rounded-lg border overflow-hidden">
         <Table>
           <TableHeader>
@@ -272,9 +396,10 @@ export default function FixturesPage() {
                           key={i}
                           className="rounded px-1.5 py-0.5 text-[11px] text-white"
                           style={{
-                            backgroundColor: difficultyColors[it.diff10 - 1],
+                            backgroundColor:
+                              difficultyColors[rankTo10(it.diff10) - 1],
                           }}
-                          title={`GW${it.gw} • Difficulty ${it.diff10}/10`}
+                          title={`GW${it.gw} • Difficulty ${it.diff10}/10 (rank-mapped)`}
                         >
                           GW{it.gw}: {it.label} {it.diff10}
                         </span>
@@ -306,15 +431,9 @@ export default function FixturesPage() {
                   <TableHead
                     key={gw}
                     ref={(el) => {
-                      if (el) {
-                        headerRefs.current[gw] = el;
-                      }
+                      if (el) headerRefs.current[gw] = el;
                     }}
-                    className={`text-center min-w-[90px] ${
-                      isNext
-                        ? 'bg-accent/40 border-b-2 border-accent font-semibold'
-                        : ''
-                    }`}
+                    className={`text-center min-w-[120px] ${isNext ? 'bg-accent/40 border-b-2 border-accent font-semibold' : ''}`}
                     title={isNext ? 'Next Gameweek' : undefined}
                   >
                     GW{gw}
@@ -336,7 +455,7 @@ export default function FixturesPage() {
 
                   {Array.from({ length: 38 }).map((_, idx) => {
                     const gw = idx + 1;
-                    const items = grid[t.id]?.[gw] ?? [];
+                    const items = gridRanked[t.id]?.[gw] ?? [];
                     const isNext = gw === nextGW;
 
                     if (items.length === 0) {
@@ -350,40 +469,81 @@ export default function FixturesPage() {
                       );
                     }
 
+                    const allFinished = items.every((it) => it.finished);
+                    if (allFinished) {
+                      return (
+                        <TableCell
+                          key={gw}
+                          className={`${isNext ? 'bg-accent/10' : ''} p-1`}
+                        >
+                          <div className="flex flex-col gap-1">
+                            {items.map((it, k) => (
+                              <div
+                                key={k}
+                                className="rounded px-1.5 py-1 text-[11px] text-center bg-muted"
+                              >
+                                {it.scoreText} {it.oppShort} ({it.venue})
+                              </div>
+                            ))}
+                          </div>
+                        </TableCell>
+                      );
+                    }
+
+                    // If doubles, we used averaged raws for ranking; display first label + +n
+                    const first = items[0];
+                    const more = items.length - 1;
+                    const rank = items[0].rank!;
+                    const colorIdx = rankTo10(rank) - 1;
+
+                    // Averages shown under the colored chip (att/def/overall are RAW-based, but color is by rank)
+                    const attAvg = round2(
+                      items.reduce((s, x) => s + (x.attRaw ?? 0), 0) /
+                        items.length
+                    );
+                    const defAvg = round2(
+                      items.reduce((s, x) => s + (x.defRaw ?? 0), 0) /
+                        items.length
+                    );
+                    const ovAvg = round2(
+                      items.reduce((s, x) => s + (x.ovRaw ?? 0), 0) /
+                        items.length
+                    );
+
                     return (
                       <TableCell
                         key={gw}
                         className={`${isNext ? 'bg-accent/10' : ''} p-1`}
                       >
-                        <div className="flex flex-col gap-1">
-                          {items.map((it, k) => {
-                            const baseCls =
-                              'rounded px-1.5 py-1 text-[11px] text-center leading-tight';
-                            if (it.finished) {
-                              return (
-                                <div
-                                  key={k}
-                                  className={`${baseCls} bg-muted text-foreground`}
-                                  title="Finished"
-                                >
-                                  {it.scoreText} {it.oppShort} ({it.venue})
-                                </div>
-                              );
-                            }
-                            return (
-                              <div
-                                key={k}
-                                className={`${baseCls} text-white`}
-                                style={{
-                                  backgroundColor:
-                                    difficultyColors[it.diff10 - 1],
-                                }}
-                                title={`Difficulty ${it.diff10}/10`}
-                              >
-                                {it.oppShort} ({it.venue})
-                              </div>
-                            );
-                          })}
+                        <div
+                          className="rounded px-1.5 py-1 text-[11px] text-center text-white"
+                          style={{
+                            backgroundColor: difficultyColors[colorIdx],
+                          }}
+                          title={`GW rank ${rank} (1 easiest • 20 hardest)`}
+                        >
+                          {first?.oppShort} ({first?.venue})
+                          {more > 0 ? ` +${more}` : ''} {rank}
+                        </div>
+                        <div className="mt-1 grid grid-cols-3 gap-1 text-[10px] leading-tight text-center">
+                          <div
+                            className="rounded bg-muted px-1 py-[2px]"
+                            title="Attacking raw (lower = easier)"
+                          >
+                            {attAvg.toFixed(2)}
+                          </div>
+                          <div
+                            className="rounded bg-muted px-1 py-[2px]"
+                            title="Defensive raw (lower = easier)"
+                          >
+                            {defAvg.toFixed(2)}
+                          </div>
+                          <div
+                            className="rounded bg-muted px-1 py-[2px]"
+                            title="Overall raw (lower = easier)"
+                          >
+                            {ovAvg.toFixed(2)}
+                          </div>
                         </div>
                       </TableCell>
                     );
