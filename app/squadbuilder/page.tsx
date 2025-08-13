@@ -71,6 +71,284 @@ type Squad = {
 
 const STORAGE_KEY = 'squad_builder_selection_v1';
 
+// ---------- exact solver with pruning ----------
+type PosKey = 'gk' | 'def' | 'mid' | 'fwd';
+type Item = {
+  id: number;
+  team: number;
+  cost: number; // millions
+  w: number;
+  p: Player;
+};
+type PoolByPos = Record<PosKey, Item[]>;
+
+function buildPoolByPos(pool: Player[], weights: Record<number, number>): PoolByPos {
+  const map: PoolByPos = { gk: [], def: [], mid: [], fwd: [] };
+  for (const p of pool) {
+    const it: Item = {
+      id: p.id,
+      team: p.team,
+      cost: p.now_cost / 10,
+      w: (weights[p.id] ?? 0) || 0,
+      p,
+    };
+    if (p.element_type === 1) map.gk.push(it);
+    else if (p.element_type === 2) map.def.push(it);
+    else if (p.element_type === 3) map.mid.push(it);
+    else map.fwd.push(it);
+  }
+  // sort each position by weight DESC (helps upper-bound & branch ordering)
+  (Object.keys(map) as PosKey[]).forEach((k) => {
+    map[k].sort((a, b) => b.w - a.w || a.cost - b.cost || a.id - b.id);
+  });
+  return map;
+}
+
+function prefixSums(items: Item[]) {
+  // prefix sum of weights (for upper bound)
+  const prefW: number[] = [0];
+  for (let i = 0; i < items.length; i++) prefW[i + 1] = prefW[i] + items[i].w;
+  // prefix of cheapest costs (we’ll also want a sorted-by-cost copy for LB)
+  const byCost = items.slice().sort((a, b) => a.cost - b.cost);
+  const prefMinCost: number[] = [0];
+  for (let i = 0; i < byCost.length; i++) prefMinCost[i + 1] = prefMinCost[i] + byCost[i].cost;
+  return { prefW, byCost, prefMinCost };
+}
+
+function bestXIExactTop3(
+  pool: Player[],
+  weights: Record<number, number>,
+  budget: number,
+  locks: Record<number, boolean>
+): Squad[] {
+  // Build per-position pools & helpers
+  const byPos = buildPoolByPos(pool, weights);
+  const PS = {
+    gk: prefixSums(byPos.gk),
+    def: prefixSums(byPos.def),
+    mid: prefixSums(byPos.mid),
+    fwd: prefixSums(byPos.fwd),
+  };
+
+  // prepare locks
+  const lockedSet = new Set<number>(Object.keys(locks).filter((id) => locks[+id]).map((id) => +id));
+
+  const teamLimit = 3;
+
+  // keep top 3 by score (high to low)
+  const best: Squad[] = [];
+  const consider = (s: Squad) => {
+    best.push(s);
+    best.sort((a, b) => b.score - a.score || a.totalCost - b.totalCost);
+    if (best.length > 3) best.pop();
+  };
+
+  // For each formation, we’ll enforce counts
+  const posOrder: PosKey[] = ['gk', 'def', 'mid', 'fwd'];
+
+  for (const form of formations) {
+    // required counts
+    const need: Record<PosKey, number> = {
+      gk: 1,
+      def: form.def,
+      mid: form.mid,
+      fwd: form.fwd,
+    };
+
+    // seed with locks; check feasibility upfront
+    const byTeam: Record<number, number> = {};
+    const chosenIds = new Set<number>();
+    const breakdown: Record<PosKey, number[]> = { gk: [], def: [], mid: [], fwd: [] };
+    let cost = 0;
+    let score = 0;
+    let feasible = true;
+
+    // place locks per pos first
+    for (const k of posOrder) {
+      const list = byPos[k];
+      for (const it of list) {
+        if (!lockedSet.has(it.id)) continue;
+        // enforce count
+        if (need[k] <= 0) { feasible = false; break; }
+        // team cap
+        const tc = byTeam[it.team] ?? 0;
+        if (tc >= teamLimit) { feasible = false; break; }
+        // budget
+        if (cost + it.cost > budget) { feasible = false; break; }
+
+        // take
+        chosenIds.add(it.id);
+        byTeam[it.team] = tc + 1;
+        need[k] -= 1;
+        cost += it.cost;
+        score += it.w;
+        breakdown[k].push(it.id);
+      }
+      if (!feasible) break;
+    }
+    if (!feasible) continue;
+
+    // build candidate arrays per pos excluding chosen/locks already taken
+    const cand: Record<PosKey, Item[]> = {
+      gk: byPos.gk.filter((x) => !chosenIds.has(x.id)),
+      def: byPos.def.filter((x) => !chosenIds.has(x.id)),
+      mid: byPos.mid.filter((x) => !chosenIds.has(x.id)),
+      fwd: byPos.fwd.filter((x) => !chosenIds.has(x.id)),
+    };
+
+    // quick impossible check: minimal remaining cost LB must fit in budget
+    const minCostLB = (k: PosKey, take: number) => {
+      if (take <= 0) return 0;
+      const arr = PS[k].byCost; // cheapest first
+      let c = 0, t = take, idx = 0;
+      while (t > 0 && idx < arr.length) {
+        const it = arr[idx++];
+        if (chosenIds.has(it.id)) continue;
+        // soft team cap check (approx; exact is enforced in DFS)
+        c += it.cost;
+        t--;
+      }
+      // if we couldn't even find enough, return +∞ to prune
+      return t > 0 ? Number.POSITIVE_INFINITY : c;
+    };
+    let neededMin =
+      minCostLB('gk', need.gk) +
+      minCostLB('def', need.def) +
+      minCostLB('mid', need.mid) +
+      minCostLB('fwd', need.fwd);
+    if (cost + neededMin > budget) continue;
+
+    // precompute pos-wise best possible remaining weight UB for pruning
+    const maxWeightUB = (k: PosKey, take: number) => {
+      if (take <= 0) return 0;
+      const arr = cand[k];
+      let t = take, sum = 0, i = 0;
+      while (t > 0 && i < arr.length) {
+        // optimistic (ignore team/budget for UB)
+        sum += arr[i].w;
+        i++; t--;
+      }
+      return sum;
+    };
+
+    // DFS over positions; within each, choose exactly need[k]
+    const order = posOrder.filter((k) => need[k] > 0); // skip any fully satisfied by locks
+
+    const dfs = (idxPos: number, costSoFar: number, scoreSoFar: number) => {
+      if (idxPos >= order.length) {
+        // full XI found
+        consider({
+          ids: Array.from(chosenIds),
+          score: scoreSoFar,
+          totalCost: costSoFar,
+          breakdown: {
+            gk: breakdown.gk.slice(),
+            def: breakdown.def.slice(),
+            mid: breakdown.mid.slice(),
+            fwd: breakdown.fwd.slice(),
+          },
+        });
+        return;
+      }
+
+      const k = order[idxPos];
+      const needK = need[k];
+      const list = cand[k];
+
+      // Upper bound pruning: best possible if we pick top needK here + max from remaining positions
+      let ub = scoreSoFar + maxWeightUB(k, needK);
+      for (let j = idxPos + 1; j < order.length; j++) ub += maxWeightUB(order[j], need[order[j]]);
+      if (best.length === 3 && ub <= best[best.length - 1].score) return;
+
+      // generate combinations of size needK from list, with budget/team pruning
+      const take: Item[] = [];
+      const teamCountLocal = byTeam;
+
+      // To speed things a bit: pre-sort by weight DESC (already done).
+      // Combination generation with pruning
+      function choose(start: number, left: number, localCost: number, localScore: number) {
+        // budget lower bound for all remaining (pos k remaining + subsequent positions)
+        let lb = 0;
+        // cheap lower bound inside this position:
+        // pick the cheapest 'left' among remaining list ignoring team cap (approx)
+        if (left > 0) {
+          // rough LB: sum of the next 'left' cheapest costs from remaining indices
+          const remaining = list.slice(start).slice().sort((a, b) => a.cost - b.cost);
+          if (remaining.length < left) return; // impossible
+          for (let i = 0; i < left; i++) lb += remaining[i].cost;
+        }
+        // plus lower bounds for subsequent positions
+        for (let j = idxPos + 1; j < order.length; j++) {
+          // cheapest 'need[order[j]]'
+          const rkey = order[j];
+          const cheap = PS[rkey].byCost
+            .filter((it) => !chosenIds.has(it.id))
+            .slice(0, need[rkey]);
+          if (cheap.length < need[rkey]) return; // impossible
+          lb += cheap.reduce((s, it) => s + it.cost, 0);
+        }
+        if (localCost + lb > budget) return;
+
+        if (left === 0) {
+          // move to next position
+          dfs(idxPos + 1, localCost, localScore);
+          return;
+        }
+        // remaining slots not enough to fill? prune
+        const remainCount = list.length - start;
+        if (remainCount < left) return;
+
+        // branch: skip current
+        // (But also branch: take current if valid)
+        // we try "take" first because list is sorted by weight desc (good for early best)
+        const cur = list[start];
+
+        // TRY TAKE cur
+        const tc = teamCountLocal[cur.team] ?? 0;
+        if (!chosenIds.has(cur.id) && tc < teamLimit && localCost + cur.cost <= budget) {
+          // optimistic UB if we take cur now
+          let ub2 = localScore + cur.w;
+          // add best we could still take here (left-1) and others
+          // (coarse UB: take next (left-1) best from list, ignoring constraints)
+          let addHere = 0;
+          const remainForUB = list.slice(start + 1);
+          for (let i = 0; i < left - 1 && i < remainForUB.length; i++) addHere += remainForUB[i].w;
+          ub2 += addHere;
+          for (let j = idxPos + 1; j < order.length; j++) ub2 += maxWeightUB(order[j], need[order[j]]);
+          if (!(best.length === 3 && ub2 <= best[best.length - 1].score)) {
+            // commit
+            chosenIds.add(cur.id);
+            teamCountLocal[cur.team] = tc + 1;
+            breakdown[k].push(cur.id);
+            choose(start + 1, left - 1, localCost + cur.cost, localScore + cur.w);
+            // revert
+            breakdown[k].pop();
+            teamCountLocal[cur.team] = tc;
+            chosenIds.delete(cur.id);
+          }
+        }
+
+        // TRY SKIP cur
+        choose(start + 1, left, localCost, localScore);
+      }
+
+      choose(0, needK, costSoFar, scoreSoFar);
+    }
+
+    dfs(0, cost, score);
+  }
+
+  // dedupe just-in-case different formations produced identical XI (rare)
+  const uniq = new Map<string, Squad>();
+  for (const s of best) {
+    const key = s.ids.slice().sort((a, b) => a - b).join('-');
+    const old = uniq.get(key);
+    if (!old || s.score > old.score) uniq.set(key, s);
+  }
+  return [...uniq.values()].sort((a, b) => b.score - a.score || a.totalCost - b.totalCost).slice(0, 3);
+}
+// ---------- /solver ----------
+
 export default function SquadBuilderPage() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
@@ -87,7 +365,7 @@ export default function SquadBuilderPage() {
   const [page, setPage] = useState(1);
 
   // bench / budget
-  const [benchValue, setBenchValue] = useState<number>(15);
+  const [benchValue, setBenchValue] = useState<number>(17);
   const budgetXI = useMemo(() => Math.max(0, 100 - benchValue), [benchValue]);
 
   // right side: chosen players + per-player weight + lock
@@ -100,6 +378,8 @@ export default function SquadBuilderPage() {
   // results
   const [results, setResults] = useState<Squad[]>([]);
   const [resultIdx, setResultIdx] = useState(0);
+  const [isLoaded, setIsLoaded] = useState(true);
+  
 
   // load from API
   useEffect(() => {
@@ -127,6 +407,7 @@ export default function SquadBuilderPage() {
 
   // hydrate from localStorage
   useEffect(() => {
+    if (!isLoaded) return; // only run once
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -140,17 +421,19 @@ export default function SquadBuilderPage() {
           setBenchValue(saved.benchValue);
       }
     } catch {}
+    setIsLoaded(false);
   }, []);
 
   // persist to localStorage
   useEffect(() => {
+    if (isLoaded) return; // only run once
     try {
       localStorage.setItem(
         STORAGE_KEY,
         JSON.stringify({ ...chosen, benchValue })
       );
     } catch {}
-  }, [chosen, benchValue]);
+  }, [chosen, benchValue, isLoaded]);
 
   const teamMap = useMemo(() => {
     const m: Record<number, Team> = {};
@@ -229,136 +512,7 @@ export default function SquadBuilderPage() {
     }));
   };
 
-  // ---- solver (respects locks) ----
-  function makeSquadsTop3(
-    pool: Player[],
-    weights: Record<number, number>,
-    maxBudget: number,
-    locks: Record<number, boolean>
-  ): Squad[] {
-    const teamLimit = 3;
-
-    const poolByPos = {
-      gk: pool.filter((p) => p.element_type === 1),
-      def: pool.filter((p) => p.element_type === 2),
-      mid: pool.filter((p) => p.element_type === 3),
-      fwd: pool.filter((p) => p.element_type === 4),
-    };
-
-    // locks
-    const locked = pool.filter((p) => locks[p.id]);
-
-    // quick checks: at least 1 GK lock if all GKs locked etc. (we’ll just let feasibility prune)
-    const ratio = (p: Player) =>
-      (weights[p.id] ?? 0) / Math.max(0.1, p.now_cost / 10);
-    Object.values(poolByPos).forEach((arr) =>
-      arr.sort((a, b) => ratio(b) - ratio(a))
-    );
-
-    // try formations, ensure locked players can fit
-    const candidates: Squad[] = [];
-
-    for (const form of formations) {
-      // start with locked
-      const startIds = new Set<number>();
-      let cost = 0;
-      const byTeam: Record<number, number> = {};
-      const breakdown = {
-        gk: [] as number[],
-        def: [] as number[],
-        mid: [] as number[],
-        fwd: [] as number[],
-      };
-
-      let need = { gk: 1, def: form.def, mid: form.mid, fwd: form.fwd };
-
-      let feasible = true;
-      for (const p of locked) {
-        const key =
-          p.element_type === 1
-            ? 'gk'
-            : p.element_type === 2
-              ? 'def'
-              : p.element_type === 3
-                ? 'mid'
-                : 'fwd';
-        if (need[key] <= 0) {
-          feasible = false;
-          break;
-        }
-        // team cap
-        const tc = byTeam[p.team] ?? 0;
-        if (tc >= teamLimit) {
-          feasible = false;
-          break;
-        }
-        const newCost = cost + p.now_cost / 10;
-        if (newCost > maxBudget) {
-          feasible = false;
-          break;
-        }
-        // take
-        startIds.add(p.id);
-        cost = newCost;
-        byTeam[p.team] = tc + 1;
-        breakdown[key].push(p.id);
-        need[key] -= 1;
-      }
-      if (!feasible) continue;
-
-      // fill remaining by value/constraints
-      const fill = (
-        list: Player[],
-        count: number,
-        key: keyof typeof breakdown
-      ) => {
-        for (const p of list) {
-          if (count <= 0) break;
-          if (startIds.has(p.id)) continue;
-          const tc = byTeam[p.team] ?? 0;
-          if (tc >= teamLimit) continue;
-          const newCost = cost + p.now_cost / 10;
-          if (newCost > maxBudget) continue;
-          // take
-          startIds.add(p.id);
-          cost = newCost;
-          byTeam[p.team] = tc + 1;
-          breakdown[key].push(p.id);
-          count -= 1;
-        }
-        return count === 0;
-      };
-
-      const okG = fill(poolByPos.gk, need.gk, 'gk');
-      const okD = fill(poolByPos.def, need.def, 'def');
-      const okM = fill(poolByPos.mid, need.mid, 'mid');
-      const okF = fill(poolByPos.fwd, need.fwd, 'fwd');
-      if (!(okG && okD && okM && okF)) continue;
-
-      const ids = Array.from(startIds);
-      const score = ids.reduce((acc, id) => acc + (weights[id] ?? 0), 0);
-
-      candidates.push({
-        ids,
-        score,
-        totalCost: cost,
-        breakdown,
-      });
-    }
-
-    // de-dup & top 3
-    const uniq = new Map<string, Squad>();
-    for (const s of candidates) {
-      const key = s.ids
-        .slice()
-        .sort((a, b) => a - b)
-        .join('-');
-      const old = uniq.get(key);
-      if (!old || s.score > old.score) uniq.set(key, s);
-    }
-    return [...uniq.values()].sort((a, b) => b.score - a.score).slice(0, 3);
-  }
-
+  // exact solver hook
   const canCompute =
     chosenPlayers.length >= 14 &&
     chosenPlayers.filter((p) => p.element_type === 1).length >= 1 &&
@@ -368,7 +522,8 @@ export default function SquadBuilderPage() {
 
   const compute = () => {
     if (!canCompute) return;
-    const squads = makeSquadsTop3(
+    // IMPORTANT: pass only the chosen pool into the exact solver
+    const squads = bestXIExactTop3(
       chosenPlayers,
       chosen.weights,
       budgetXI,
@@ -691,7 +846,9 @@ export default function SquadBuilderPage() {
 
               <div className="mt-2 text-xs text-muted-foreground">
                 Locks are forced into the XI; solver respects ≤3 per team,
-                formation rules, and budget.
+                formation rules, and budget. Uses exact search with pruning
+                (budget lower bound + weight upper bound) to avoid missing
+                stronger upgrades.
               </div>
             </div>
           )}

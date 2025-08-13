@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "depcruise": "asdasd"
+    "depcruise": "asdasd",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -43,13 +44,14 @@
     "vaul": "^1.1.2"
   },
   "devDependencies": {
-    "@types/node": "24.2.0",
+    "@types/node": "^24.2.0",
     "@types/react": "18.3.23",
     "autoprefixer": "^10.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.0.4",
     "postcss": "^8",
     "prettier": "^3.6.2",
-    "tailwindcss": "^3.3.0"
+    "tailwindcss": "^3.3.0",
+    "vitest": "^3.2.4"
   }
 }

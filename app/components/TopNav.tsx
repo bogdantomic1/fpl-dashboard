@@ -14,7 +14,7 @@ import ModeToggle from './modeToggle';
 
 export default function TopNav() {
   return (
-    <div className="w-full border-b bg-background">
+    <div className="flex w-full border-b bg-background flex-row justify-between">
       {/* full-bleed; no centering container */}
       <div className="px-0">
         <NavigationMenu>
@@ -56,6 +56,20 @@ export default function TopNav() {
                           Use our squad builder to simulate your team for the
                           next gameweek. Get suggestions based on your current
                           squad and the latest data.
+                        </p>
+                      </NavigationMenuLink>
+                    </Link>
+                  </li>
+                   <li>
+                    <Link href="/playerrotation" legacyBehavior passHref>
+                      <NavigationMenuLink className="block rounded-md p-3 hover:bg-muted">
+                        <div className="text-sm font-medium leading-none">
+                          Player rotation
+                        </div>
+                        <p className="mt-1 text-xs text-muted-foreground leading-snug">
+                          Analyze player rotation patterns and optimize your
+                          squad for upcoming fixtures. Visualize player
+                          combinations and their impact on your team.
                         </p>
                       </NavigationMenuLink>
                     </Link>

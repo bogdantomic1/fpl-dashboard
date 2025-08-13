@@ -42,6 +42,7 @@
   background-repeat: no-repeat;
   background-position: top center;
   filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.2));
+  background-size: cover;
 }
 
 /* rows sit on top of the field */
@@ -50,7 +51,7 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: start;
   /* padding: 6% 10% 10%; */
   pointer-events: none; /* children re-enable */
 }
@@ -60,6 +61,8 @@
   justify-content: center;
   gap: clamp(16px, 2vw, 28px);
   pointer-events: none;
+  width: -webkit-fill-available; /* fill available width */
+  height: -webkit-fill-available; /* fill available height */
 }
 
 .retro-bench {
@@ -67,8 +70,10 @@
   grid-template-columns: repeat(4, 1fr);
   gap: clamp(16px, 2vw, 28px);
   width: 70%;
-  margin: 0 auto 10px;
+  /* margin: 0 auto 10px; */
   pointer-events: none;
+  width: -webkit-fill-available; /* fill available width */
+background-color: rgba(0, 0, 0, 0.3);
 }
 
 .retro-bench__cell {
@@ -135,7 +140,7 @@
 }
 .retro-jersey__img {
   width: 100%;
-  aspect-ratio: 3;
+  aspect-ratio: 2;
   background-size: contain;
   background-repeat: no-repeat;
   background-position: center center;
@@ -194,3 +199,5 @@
     display: none;
   } /* hide rails on small widths to keep inside field */
 }
+
+
