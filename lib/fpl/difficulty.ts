@@ -169,7 +169,6 @@ export function computeDifficultyMap(params: {
       myDef,
       oppAttack,
       oppDef,
-      isHome,
     };
   });
 

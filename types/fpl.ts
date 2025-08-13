@@ -27,6 +27,10 @@ export interface Team {
   name: string;
   strength_overall_home?: number;
   strength_overall_away?: number;
+  strength_attack_home?: number;
+  strength_attack_away?: number;
+  strength_defence_home?: number;
+  strength_defence_away?: number;
 }
 
 export interface Position {

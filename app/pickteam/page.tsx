@@ -185,16 +185,13 @@ export default function PickTeamPage() {
         const parsed = JSON.parse(raw) as {
           gkp: number[]; def: number[]; mid: number[]; fwd: number[];
         };
-        if(gkp.length === 0 && def.length===0 && mid.length === 0 && fwd.length === 0) {
-          console.log('No shortlist found, initializing empty');
+        
         setShortGKP(parsed.gkp ?? []);
         setShortDEF(parsed.def ?? []);
         setShortMID(parsed.mid ?? []);
         setShortFWD(parsed.fwd ?? []);
-        }
-        else {
-          console.log('Shortlist found, loading existing');
-          return}
+        
+       
       }
     } catch {}
   }, []);
