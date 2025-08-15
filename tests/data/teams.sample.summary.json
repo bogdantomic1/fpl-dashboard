@@ -1,0 +1,346 @@
+{
+  "table": [
+    {
+      "pos": 1,
+      "id": 13,
+      "name": "Manchester City",
+      "short": "MCI",
+      "att": 1310,
+      "def": 1280,
+      "ovr": 1300,
+      "att10": 10,
+      "def10": 10,
+      "ovr10": 10
+    },
+    {
+      "pos": 2,
+      "id": 1,
+      "name": "Arsenal",
+      "short": "ARS",
+      "att": 1255,
+      "def": 1280,
+      "ovr": 1270,
+      "att10": 8,
+      "def10": 10,
+      "ovr10": 9
+    },
+    {
+      "pos": 3,
+      "id": 12,
+      "name": "Liverpool",
+      "short": "LIV",
+      "att": 1267.5,
+      "def": 1217.5,
+      "ovr": 1242.5,
+      "att10": 9,
+      "def10": 8,
+      "ovr10": 8
+    },
+    {
+      "pos": 4,
+      "id": 15,
+      "name": "Newcastle",
+      "short": "NEW",
+      "att": 1200,
+      "def": 1200,
+      "ovr": 1200,
+      "att10": 6,
+      "def10": 7,
+      "ovr10": 6
+    },
+    {
+      "pos": 5,
+      "id": 17,
+      "name": "Tottenham",
+      "short": "TOT",
+      "att": 1202.5,
+      "def": 1180,
+      "ovr": 1192.5,
+      "att10": 6,
+      "def10": 6,
+      "ovr10": 6
+    },
+    {
+      "pos": 6,
+      "id": 5,
+      "name": "Brighton",
+      "short": "BHA",
+      "att": 1180,
+      "def": 1157.5,
+      "ovr": 1170,
+      "att10": 6,
+      "def10": 5,
+      "ovr10": 5
+    },
+    {
+      "pos": 7,
+      "id": 7,
+      "name": "Chelsea",
+      "short": "CHE",
+      "att": 1170,
+      "def": 1155,
+      "ovr": 1162.5,
+      "att10": 5,
+      "def10": 5,
+      "ovr10": 5
+    },
+    {
+      "pos": 8,
+      "id": 18,
+      "name": "Aston Villa",
+      "short": "AVL",
+      "att": 1162.5,
+      "def": 1152.5,
+      "ovr": 1157.5,
+      "att10": 5,
+      "def10": 5,
+      "ovr10": 5
+    },
+    {
+      "pos": 9,
+      "id": 14,
+      "name": "Manchester United",
+      "short": "MUN",
+      "att": 1152.5,
+      "def": 1142.5,
+      "ovr": 1147.5,
+      "att10": 5,
+      "def10": 5,
+      "ovr10": 5
+    },
+    {
+      "pos": 10,
+      "id": 19,
+      "name": "West Ham",
+      "short": "WHU",
+      "att": 1140,
+      "def": 1132.5,
+      "ovr": 1137.5,
+      "att10": 4,
+      "def10": 4,
+      "ovr10": 4
+    },
+    {
+      "pos": 11,
+      "id": 4,
+      "name": "Brentford",
+      "short": "BRE",
+      "att": 1132.5,
+      "def": 1122.5,
+      "ovr": 1127.5,
+      "att10": 4,
+      "def10": 4,
+      "ovr10": 4
+    },
+    {
+      "pos": 12,
+      "id": 20,
+      "name": "Wolves",
+      "short": "WOL",
+      "att": 1115,
+      "def": 1117.5,
+      "ovr": 1117.5,
+      "att10": 3,
+      "def10": 4,
+      "ovr10": 4
+    },
+    {
+      "pos": 13,
+      "id": 9,
+      "name": "Everton",
+      "short": "EVE",
+      "att": 1105,
+      "def": 1107.5,
+      "ovr": 1107.5,
+      "att10": 3,
+      "def10": 3,
+      "ovr10": 3
+    },
+    {
+      "pos": 14,
+      "id": 10,
+      "name": "Fulham",
+      "short": "FUL",
+      "att": 1100,
+      "def": 1092.5,
+      "ovr": 1097.5,
+      "att10": 3,
+      "def10": 3,
+      "ovr10": 3
+    },
+    {
+      "pos": 15,
+      "id": 8,
+      "name": "Crystal Palace",
+      "short": "CRY",
+      "att": 1090,
+      "def": 1095,
+      "ovr": 1092.5,
+      "att10": 2,
+      "def10": 3,
+      "ovr10": 3
+    },
+    {
+      "pos": 16,
+      "id": 3,
+      "name": "Bournemouth",
+      "short": "BOU",
+      "att": 1085,
+      "def": 1087.5,
+      "ovr": 1087.5,
+      "att10": 2,
+      "def10": 3,
+      "ovr10": 3
+    },
+    {
+      "pos": 17,
+      "id": 11,
+      "name": "Leeds",
+      "short": "LEE",
+      "att": 1080,
+      "def": 1075,
+      "ovr": 1080,
+      "att10": 2,
+      "def10": 2,
+      "ovr10": 2
+    },
+    {
+      "pos": 18,
+      "id": 16,
+      "name": "Nottingham Forest",
+      "short": "NFO",
+      "att": 1070,
+      "def": 1065,
+      "ovr": 1070,
+      "att10": 2,
+      "def10": 2,
+      "ovr10": 2
+    },
+    {
+      "pos": 19,
+      "id": 6,
+      "name": "Burnley",
+      "short": "BUR",
+      "att": 1057.5,
+      "def": 1060,
+      "ovr": 1060,
+      "att10": 1,
+      "def10": 2,
+      "ovr10": 2
+    },
+    {
+      "pos": 20,
+      "id": 21,
+      "name": "Ipswich",
+      "short": "IPS",
+      "att": 1047.5,
+      "def": 1045,
+      "ovr": 1045,
+      "att10": 1,
+      "def10": 1,
+      "ovr10": 1
+    }
+  ],
+  "summary": {
+    "MCI": {
+      "att10": 10,
+      "def10": 10,
+      "ovr10": 10
+    },
+    "ARS": {
+      "att10": 8,
+      "def10": 10,
+      "ovr10": 9
+    },
+    "LIV": {
+      "att10": 9,
+      "def10": 8,
+      "ovr10": 8
+    },
+    "NEW": {
+      "att10": 6,
+      "def10": 7,
+      "ovr10": 6
+    },
+    "TOT": {
+      "att10": 6,
+      "def10": 6,
+      "ovr10": 6
+    },
+    "BHA": {
+      "att10": 6,
+      "def10": 5,
+      "ovr10": 5
+    },
+    "CHE": {
+      "att10": 5,
+      "def10": 5,
+      "ovr10": 5
+    },
+    "AVL": {
+      "att10": 5,
+      "def10": 5,
+      "ovr10": 5
+    },
+    "MUN": {
+      "att10": 5,
+      "def10": 5,
+      "ovr10": 5
+    },
+    "WHU": {
+      "att10": 4,
+      "def10": 4,
+      "ovr10": 4
+    },
+    "BRE": {
+      "att10": 4,
+      "def10": 4,
+      "ovr10": 4
+    },
+    "WOL": {
+      "att10": 3,
+      "def10": 4,
+      "ovr10": 4
+    },
+    "EVE": {
+      "att10": 3,
+      "def10": 3,
+      "ovr10": 3
+    },
+    "FUL": {
+      "att10": 3,
+      "def10": 3,
+      "ovr10": 3
+    },
+    "CRY": {
+      "att10": 2,
+      "def10": 3,
+      "ovr10": 3
+    },
+    "BOU": {
+      "att10": 2,
+      "def10": 3,
+      "ovr10": 3
+    },
+    "LEE": {
+      "att10": 2,
+      "def10": 2,
+      "ovr10": 2
+    },
+    "NFO": {
+      "att10": 2,
+      "def10": 2,
+      "ovr10": 2
+    },
+    "BUR": {
+      "att10": 1,
+      "def10": 2,
+      "ovr10": 2
+    },
+    "IPS": {
+      "att10": 1,
+      "def10": 1,
+      "ovr10": 1
+    }
+  }
+}

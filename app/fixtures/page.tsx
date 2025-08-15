@@ -9,6 +9,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import {
+  buildVenueStrengthTable,
+  fixtureTripletDifficulty,
+} from '@/lib/fpl/difficulty';
 
 type Team = {
   id: number;
@@ -24,10 +28,10 @@ type Team = {
 
 type Fixture = {
   id: number;
-  event: number | null;
+  event: number | null; // 1..38 or null
   team_h: number;
   team_a: number;
-  team_h_difficulty: number; // not used for calc now (we compute our own)
+  team_h_difficulty: number;
   team_a_difficulty: number;
   team_h_score: number | null;
   team_a_score: number | null;
@@ -41,51 +45,64 @@ type CellItem = {
   finished: boolean;
   scoreText?: string;
 
-  // New absolute difficulty pieces:
-  attRaw?: number; // lower is easier
-  defRaw?: number; // lower is easier
-  ovRaw?: number; // lower is easier (α·1/xGFp + β·xGAp)
+  // triplet difficulties (1..10, higher = harder) for this team vs opponent
+  att?: number;
+  def?: number;
+  ovr?: number;
 
-  // After per-GW ranking:
+  // rank color helpers
   rank?: number; // 1..20 (1 easiest)
-  att10?: number; // display helper (1..10) from rank
-  def10?: number;
-  ov10?: number;
+  color10?: number; // 1..10 mapped from rank
 };
 
 type Grid = Record<number, Record<number, CellItem[]>>;
 
 const difficultyColors = [
+  // 1–6: Green shades
   '#0a7d33',
-  '#1b7a2f',
-  '#2c742a',
-  '#3d6c25',
-  '#4e6220',
-  '#5f561b',
-  '#704915',
-  '#813a0f',
+  '#137a31',
+  '#1c742f',
+  '#256c2d',
+  '#2e622b',
+  '#375629',
+
+  // 7–14: Gray shades
+  '#444444',
+  '#4f4f4f',
+  '#5a5a5a',
+  '#656565',
+  '#707070',
+  '#7b7b7b',
+  '#868686',
+  '#919191',
+
+  // 15–20: Red shades
   '#922a09',
+  '#9b2207',
   '#a31803',
+  '#b01200',
+  '#bb0a00',
+  '#c30000',
 ];
 
 const clamp = (n: number, lo: number, hi: number) =>
   Math.max(lo, Math.min(hi, n));
 const round2 = (n: number) => Math.round(n * 100) / 100;
-const rankTo10 = (rank: number) => clamp(Math.ceil(rank / 2), 1, 10); // 1..20 → 1..10
-
-// bounded exp(log ratio)
-function boundedRatio(a: number, b: number, L = 0.7) {
-  const la = Math.log(Math.max(1, a));
-  const lb = Math.log(Math.max(1, b));
-  const z = clamp(la - lb, -L, L);
-  return Math.exp(z);
-}
+// 1..20 → 1..10 buckets for coloring
+const rankTo10 = (rank: number) => clamp(Math.ceil(rank / 2), 1, 10);
 
 export default function FixturesPage() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // build once whenever teams/fixtures change
+  const strengths = useMemo(
+    () => buildVenueStrengthTable(teams, fixtures),
+    [teams, fixtures]
+  );
+
+  // sticky header & autoscroll
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const headerRefs = useRef<Record<number, HTMLTableCellElement | null>>({});
 
@@ -114,24 +131,23 @@ export default function FixturesPage() {
     return m;
   }, [teams]);
 
-  // const nextGW = useMemo(() => {
-  //   const now = Date.now();
-  //   const candidates = fixtures
-  //     .filter((f) => f.event != null && !f.finished)
-  //     .filter((f) =>
-  //       f.kickoff_time ? Date.parse(f.kickoff_time) >= now : true
-  //     )
-  //     .map((f) => f.event as number);
-  //   if (!candidates.length) {
-  //     const any = fixtures
-  //       .filter((f) => f.event != null)
-  //       .map((f) => f.event as number);
-  //     return any.length ? Math.min(...any) : 1;
-  //   }
-  //   return Math.min(...candidates);
-  // }, [fixtures]);
+  // Next GW (first unfinished in future)
+  const nextGW = useMemo(() => {
+    const now = Date.now();
+    const upcoming = fixtures
+      .filter((f) => f.event != null && !f.finished)
+      .filter((f) =>
+        f.kickoff_time ? Date.parse(f.kickoff_time) >= now : true
+      )
+      .map((f) => f.event as number);
+    if (upcoming.length) return Math.min(...upcoming);
+    const any = fixtures
+      .filter((f) => f.event != null)
+      .map((f) => f.event as number);
+    return any.length ? Math.min(...any) : 1;
+  }, [fixtures]);
 
-  // STEP 1: build base grid & compute raw difficulties per match (unfinished only)
+  /** STEP 1: base grid with computed ATT/DEF/OVR via strengths table */
   const gridBase: Grid = useMemo(() => {
     if (!teams.length) return {};
     const base: Grid = {};
@@ -147,7 +163,7 @@ export default function FixturesPage() {
       const away = teamMap[f.team_a];
       if (!home || !away) return;
 
-      // HOME row
+      // HOME row (my team = home)
       {
         const finished = !!f.finished;
         const item: CellItem = {
@@ -160,32 +176,20 @@ export default function FixturesPage() {
         };
 
         if (!finished) {
-          // xGF proxy (home trying to score) = boundedRatio(home.att_home, away.def_away)
-          const xGFp = boundedRatio(
-            home.strength_attack_home ?? 1,
-            away.strength_defence_away ?? 1
-          );
-          // xGA proxy (home likely to concede) = boundedRatio(away.att_away, home.def_home)
-          const xGAp = boundedRatio(
-            away.strength_attack_away ?? 1,
-            home.strength_defence_home ?? 1
-          );
-
-          const alpha = 0.45,
-            beta = 0.55;
-          const attRaw = 1 / xGFp; // harder if we can’t create
-          const defRaw = xGAp; // harder if likely to concede
-          const ovRaw = alpha * attRaw + beta * defRaw;
-
-          item.attRaw = attRaw;
-          item.defRaw = defRaw;
-          item.ovRaw = ovRaw;
+          const trip = fixtureTripletDifficulty({
+            strengths,
+            myTeamId: home.id,
+            oppTeamId: away.id,
+            venue: 'H',
+          });
+          item.att = trip.att;
+          item.def = trip.def;
+          item.ovr = trip.ovr;
         }
-
-        base[f.team_h][gw].push(item);
+        base[home.id][gw].push(item);
       }
 
-      // AWAY row
+      // AWAY row (my team = away)
       {
         const finished = !!f.finished;
         const item: CellItem = {
@@ -198,131 +202,95 @@ export default function FixturesPage() {
         };
 
         if (!finished) {
-          const xGFp = boundedRatio(
-            away.strength_attack_away ?? 1,
-            home.strength_defence_home ?? 1
-          );
-          const xGAp = boundedRatio(
-            home.strength_attack_home ?? 1,
-            away.strength_defence_away ?? 1
-          );
-
-          const alpha = 0.45,
-            beta = 0.55;
-          const attRaw = 1 / xGFp;
-          const defRaw = xGAp;
-          const ovRaw = alpha * attRaw + beta * defRaw;
-
-          item.attRaw = attRaw;
-          item.defRaw = defRaw;
-          item.ovRaw = ovRaw;
+          const trip = fixtureTripletDifficulty({
+            strengths,
+            myTeamId: away.id,
+            oppTeamId: home.id,
+            venue: 'A',
+          });
+          item.att = trip.att;
+          item.def = trip.def;
+          item.ovr = trip.ovr;
         }
-
-        base[f.team_a][gw].push(item);
+        base[away.id][gw].push(item);
       }
     });
 
     return base;
-  }, [teams, fixtures, teamMap]);
+  }, [teams, fixtures, strengths, teamMap]);
 
-  // STEP 2: per-GW ranking (absolute across the league). Handle doubles by averaging raws first.
+  /**
+   * STEP 2: per‑GW ranking across league by average OVR (doubles averaged).
+   * Lower OVR = easier ⇒ rank ascending (1..20).
+   * Color index = rank mapped to 1..10 (two ranks per color step).
+   */
   const gridRanked: Grid = useMemo(() => {
-    // For each GW, compute average attRaw/defRaw/ovRaw per team, then rank ovRaw (1..20).
-    const out: Grid = JSON.parse(JSON.stringify(gridBase)); // shallow copy structure
+    // copy structure
+    const out: Grid = JSON.parse(JSON.stringify(gridBase));
+
     for (let gw = 1; gw <= 38; gw++) {
-      const rows: { teamId: number; att: number; def: number; ov: number }[] =
-        [];
+      const rows: { teamId: number; avgOvr: number }[] = [];
 
       teams.forEach((t) => {
         const items = (gridBase[t.id]?.[gw] ?? []).filter(
-          (x) => !x.finished && x.ovRaw != null
+          (x) => !x.finished && x.ovr != null
         );
         if (!items.length) return;
-
-        const att =
-          items.reduce((s, x) => s + (x.attRaw as number), 0) / items.length;
-        const def =
-          items.reduce((s, x) => s + (x.defRaw as number), 0) / items.length;
-        const ov =
-          items.reduce((s, x) => s + (x.ovRaw as number), 0) / items.length;
-
-        rows.push({ teamId: t.id, att, def, ov });
+        const avgOvr =
+          items.reduce((s, x) => s + (x.ovr as number), 0) / items.length;
+        rows.push({ teamId: t.id, avgOvr });
       });
 
-      // lower raw = easier → rank ascending
-      rows.sort((a, b) => a.ov - b.ov || a.teamId - b.teamId);
+      // rank easiest first
+      rows.sort((a, b) => a.avgOvr - b.avgOvr || a.teamId - b.teamId);
       const rankMap: Record<number, number> = {};
       rows.forEach((r, i) => (rankMap[r.teamId] = i + 1));
 
-      // write back ranks & 10-scale color helper (by rank)
+      // write rank + color helper back on each unfinished item
       teams.forEach((t) => {
         const bucket = out[t.id]?.[gw];
         if (!bucket) return;
         const r = rankMap[t.id];
         if (!r) return; // no unfinished fixtures for that team in this GW
-
-        // Use rank->10 mapping for display
-        const ov10 = rankTo10(r);
-
-        // derive att/def on 10-scale with same rank color (or you can build separate ranks if you want)
-        // Here, we keep att10/def10 from their own raws but mapped by team’s OV rank color for consistency.
+        const c10 = r; //rankTo10(r)
         bucket.forEach((it) => {
           if (it.finished) return;
           it.rank = r;
-          it.ov10 = ov10;
-          // Optional: if you want separate att/def ranks, compute them similarly; for now use ov10 color.
-          it.att10 = ov10;
-          it.def10 = ov10;
+          it.color10 = c10;
         });
       });
     }
+
     return out;
   }, [gridBase, teams]);
 
-  // Ranking by next 4 using new ov10 (rank-based color)
-  const nextGW = useMemo(() => {
-    const now = Date.now();
-    const candidates = fixtures
-      .filter((f) => f.event != null && !f.finished)
-      .filter((f) =>
-        f.kickoff_time ? Date.parse(f.kickoff_time) >= now : true
-      )
-      .map((f) => f.event as number);
-    if (!candidates.length) {
-      const any = fixtures
-        .filter((f) => f.event != null)
-        .map((f) => f.event as number);
-      return any.length ? Math.min(...any) : 1;
-    }
-    return Math.min(...candidates);
-  }, [fixtures]);
-
+  // Ranking table: total of next 4 (use rank→color10 numbers for the mini chips)
   const nextFourRanks = useMemo(() => {
     if (!teams.length) return [];
     const rows = teams.map((t) => {
-      const upcoming: { gw: number; label: string; diff10: number }[] = [];
+      const upcoming: { gw: number; label: string; color10: number }[] = [];
       for (let gw = nextGW; gw <= 38; gw++) {
         const cells = gridRanked[t.id]?.[gw] ?? [];
         cells.forEach((it) => {
-          if (!it.finished && it.ov10 != null) {
+          if (!it.finished && it.color10 != null) {
             upcoming.push({
               gw,
               label: `${it.oppShort} (${it.venue})`,
-              diff10: it.ov10!,
+              color10: it.color10!,
             });
           }
         });
         if (upcoming.length >= 4) break;
       }
       const slice4 = upcoming.slice(0, 4);
-      const total = slice4.reduce((s, x) => s + x.diff10, 0);
+      const total = slice4.reduce((s, x) => s + x.color10, 0);
       return { teamId: t.id, team: t.name, items: slice4, total };
     });
     rows.sort((a, b) => a.total - b.total || a.team.localeCompare(b.team));
     return rows;
   }, [teams, gridRanked, nextGW]);
 
-  // Auto-scroll to next GW
+  // autoscroll to next GW header
   const scrollRefCurrent = scrollRef.current;
   useEffect(() => {
     const scroller = scrollRef.current;
@@ -356,7 +324,7 @@ export default function FixturesPage() {
         <span className="inline-flex items-center gap-1">
           <span
             className="h-3 w-4 rounded"
-            style={{ background: difficultyColors[9] }}
+            style={{ background: difficultyColors[19] }}
           />{' '}
           10 (hardest)
         </span>
@@ -396,12 +364,11 @@ export default function FixturesPage() {
                           key={i}
                           className="rounded px-1.5 py-0.5 text-[11px] text-white"
                           style={{
-                            backgroundColor:
-                              difficultyColors[rankTo10(it.diff10) - 1],
+                            backgroundColor: difficultyColors[it.color10 - 1],
                           }}
-                          title={`GW${it.gw} • Difficulty ${it.diff10}/10 (rank-mapped)`}
+                          title={`GW${it.gw} • color ${it.color10}/10 (rank‑mapped)`}
                         >
-                          GW{it.gw}: {it.label} {it.diff10}
+                          GW{it.gw}: {it.label} {it.color10}
                         </span>
                       ))
                     )}
@@ -490,25 +457,22 @@ export default function FixturesPage() {
                       );
                     }
 
-                    // If doubles, we used averaged raws for ranking; display first label + +n
-                    const first = items[0];
-                    const more = items.length - 1;
+                    // doubles: average triplets for display & use team rank color
                     const rank = items[0].rank!;
-                    const colorIdx = rankTo10(rank) - 1;
+                    const colorIdx = (items[0].color10 ?? rankTo10(rank)) - 1;
 
-                    // Averages shown under the colored chip (att/def/overall are RAW-based, but color is by rank)
                     const attAvg = round2(
-                      items.reduce((s, x) => s + (x.attRaw ?? 0), 0) /
-                        items.length
+                      items.reduce((s, x) => s + (x.att ?? 0), 0) / items.length
                     );
                     const defAvg = round2(
-                      items.reduce((s, x) => s + (x.defRaw ?? 0), 0) /
-                        items.length
+                      items.reduce((s, x) => s + (x.def ?? 0), 0) / items.length
                     );
-                    const ovAvg = round2(
-                      items.reduce((s, x) => s + (x.ovRaw ?? 0), 0) /
-                        items.length
+                    const ovrAvg = round2(
+                      items.reduce((s, x) => s + (x.ovr ?? 0), 0) / items.length
                     );
+
+                    const first = items[0];
+                    const more = items.length - 1;
 
                     return (
                       <TableCell
@@ -528,21 +492,21 @@ export default function FixturesPage() {
                         <div className="mt-1 grid grid-cols-3 gap-1 text-[10px] leading-tight text-center">
                           <div
                             className="rounded bg-muted px-1 py-[2px]"
-                            title="Attacking raw (lower = easier)"
+                            title="Attacking difficulty (1..10, higher=harder)"
                           >
                             {attAvg.toFixed(2)}
                           </div>
                           <div
                             className="rounded bg-muted px-1 py-[2px]"
-                            title="Defensive raw (lower = easier)"
+                            title="Defensive difficulty (1..10, higher=harder)"
                           >
                             {defAvg.toFixed(2)}
                           </div>
                           <div
                             className="rounded bg-muted px-1 py-[2px]"
-                            title="Overall raw (lower = easier)"
+                            title="Overall difficulty (1..10, higher=harder)"
                           >
-                            {ovAvg.toFixed(2)}
+                            {ovrAvg.toFixed(2)}
                           </div>
                         </div>
                       </TableCell>
