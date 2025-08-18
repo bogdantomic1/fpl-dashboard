@@ -19,8 +19,11 @@ export function buildTransferStats(
     const ownershipPct = parseFloat(p.selected_by_percent); // "18.2" -> 18.2
     const transfersIn = p.transfers_in_event ?? 0;
     const transfersOut = p.transfers_out_event ?? 0;
-    const inPct = (transfersIn / totalManagers) * 100;
-    const outPct = (transfersOut / totalManagers) * 100;
+    //calculate real number of mangers owening that play using totalManager & ownership %
+    const realNumberOfMangers = (totalManagers / 100) * ownershipPct;
+
+    const inPct = (transfersIn / realNumberOfMangers) * 100;
+    const outPct = (transfersOut / realNumberOfMangers) * 100;
     return {
       id: p.id,
       name: p.web_name,
